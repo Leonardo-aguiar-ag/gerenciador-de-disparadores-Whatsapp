@@ -229,3 +229,7 @@ npm start
 ```
 
 A documentação detalhada está em [`V10 Disparador/README.md`](V10%20Disparador/README.md).
+
+## Download da extensão V10
+
+Para instalar no Chrome, use o pacote [`gerenciador-de-disparadores-Whatsapp-V10-extensao.zip`](gerenciador-de-disparadores-Whatsapp-V10-extensao.zip). Depois de extrair, selecione a pasta onde `manifest.json` aparece diretamente ao usar **Carregar sem compactação** em `chrome://extensions`.
