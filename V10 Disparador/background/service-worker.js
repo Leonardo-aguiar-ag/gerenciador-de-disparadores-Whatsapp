@@ -20,7 +20,7 @@ async function api(path, options = {}) {
   const cfg = await settings();
   const headers = { 'content-type': 'application/json', ...(options.headers || {}) };
   if (cfg.backendApiKey) headers.authorization = `Bearer ${cfg.backendApiKey}`;
-  const response = await fetch(`${cfg.backendUrl.replace(/\/$/, '')}${path}`, { ...options, headers });
+  const requestOptions = { ...options, headers }; if (typeof requestOptions.body !== 'string' && requestOptions.body != null) requestOptions.body = JSON.stringify(requestOptions.body); const response = await fetch(`${cfg.backendUrl.replace(/\/$/, '')}${path}`, requestOptions);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Backend ${response.status}`);
   return body;

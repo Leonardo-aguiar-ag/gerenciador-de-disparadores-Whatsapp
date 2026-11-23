@@ -55,3 +55,9 @@ A V10 consulta as releases do repositório GitHub. A interface exibe a versão a
 ## Navegação da V10
 
 A interface segue a identidade visual da V9: tema escuro/azul, cartões compactos, avatar no cabeçalho, abas horizontais, indicadores por cor e barra de progresso. A ordem principal é: **Dashboard/CRM**, **Disparos**, **Scripts**, **Campanhas**, **Lote**, **Configurações** e **Ajuda**.
+
+## Scripts com 20 variações
+
+Na aba **Scripts**, existem 20 campos `Variação 1` a `Variação 20`. Preencha as mensagens, salve a campanha e use-a no disparo. A fila embaralha as variações e usa cada uma no máximo uma vez por ciclo; quando todas as opções preenchidas forem usadas, um novo ciclo é embaralhado. Assim, com 20 variações e contatos suficientes, não há repetição até completar as 20 opções.
+
+Os scripts podem ser salvos em versões, importados em JSON/TXT, exportados e limpos.
