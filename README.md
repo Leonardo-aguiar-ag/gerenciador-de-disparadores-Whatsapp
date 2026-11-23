@@ -213,3 +213,19 @@ Não coloque tokens reais em commits ou no código-fonte. O arquivo `.env.exampl
 - [`STATUS_IMPLEMENTACOES.md`](V9%2020%20%20Disparado/STATUS_IMPLEMENTACOES.md): status atual das integrações;
 - [`LEIA-ME.txt`](V9%2020%20%20Disparado/LEIA-ME.txt): instruções resumidas;
 - [`backend/README.md`](V9%2020%20%20Disparado/backend/README.md): API e execução do backend.
+
+## V10 — base modular e operacional
+
+A pasta [`V10 Disparador`](V10%20Disparador/README.md) é a nova base modular do projeto. Ela preserva V1–V9 e adiciona extensão separada por módulos, backend TypeScript com SQLite, modo simulação, Cloud API, CRM, importação CSV/Excel, fila observável, opt-out, backups, logs, dashboard, métricas, testes e verificação de releases do GitHub.
+
+Para começar:
+
+```bash
+cd "V10 Disparador/backend"
+cp .env.example .env
+npm install
+npm test
+npm start
+```
+
+A documentação detalhada está em [`V10 Disparador/README.md`](V10%20Disparador/README.md).

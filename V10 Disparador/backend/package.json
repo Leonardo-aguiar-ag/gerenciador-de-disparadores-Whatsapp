@@ -1,0 +1,17 @@
+{
+  "name": "gerenciador-disparadores-v10-backend",
+  "version": "10.0.0",
+  "private": true,
+  "description": "Backend modular com SQLite, fila, CRM, simulação e Cloud API para a V10",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "node --watch --experimental-strip-types src/server.ts",
+    "test": "npm run build && node --test tests/smoke.test.js",
+    "migrate:v9": "npm run build && node dist/migrate-v9.js"
+  },
+  "engines": { "node": ">=22.5" },
+  "dependencies": {},
+  "devDependencies": { "@types/node": "^22.10.2", "typescript": "^5.7.2" }
+}

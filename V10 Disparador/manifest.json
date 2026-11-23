@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Gerenciador de Disparadores WhatsApp V10",
+  "version": "10.0.0",
+  "description": "Campanhas, CRM, simulação e fila observável para WhatsApp Web ou Cloud API.",
+  "permissions": ["storage", "tabs", "scripting", "activeTab", "alarms", "notifications", "downloads"],
+  "action": { "default_popup": "popup/popup.html" },
+  "background": { "service_worker": "background/service-worker.js", "type": "module" },
+  "content_scripts": [{
+    "matches": ["https://web.whatsapp.com/*"],
+    "js": ["shared/phone.js", "content/whatsapp-adapter.js"],
+    "run_at": "document_idle"
+  }],
+  "host_permissions": [
+    "https://web.whatsapp.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://api.github.com/*"
+  ],
+  "options_ui": { "page": "popup/popup.html", "open_in_tab": true }
+}
