@@ -51,3 +51,7 @@ A V10 consulta as releases do repositório GitHub. A interface exibe a versão a
 - A Cloud API exige credenciais oficiais e configuração de webhook.
 - Autenticação de usuários, multi-tenant e OAuth completo do Google Sheets ainda são etapas posteriores.
 - O banco SQLite é adequado para uma instalação local ou servidor pequeno; produção multioperador deve usar PostgreSQL/Redis e um worker dedicado.
+
+## Navegação da V10
+
+A interface segue a identidade visual da V9: tema escuro/azul, cartões compactos, avatar no cabeçalho, abas horizontais, indicadores por cor e barra de progresso. A ordem principal é: **Dashboard/CRM**, **Disparos**, **Scripts**, **Campanhas**, **Lote**, **Configurações** e **Ajuda**.
