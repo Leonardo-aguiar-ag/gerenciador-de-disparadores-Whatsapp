@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Hapvida Pro - Anti-Reload",
+  "version": "21.0",
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://web.whatsapp.com/*"],
+    "js": ["content.js"]
+  }],
+  "host_permissions": ["https://web.whatsapp.com/*"]
+}

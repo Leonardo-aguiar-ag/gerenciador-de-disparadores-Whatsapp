@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    :root {
+      --primary: #0078d4; --success: #25d366; --danger: #ef4444; --warning: #f59e0b;
+      --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #e5e7eb;
+    }
+    body.dark {
+      --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --border: #334155;
+    }
+    body { width: 460px; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); margin: 0; color: var(--text); transition: 0.2s; }
+    
+    .header { background: var(--primary); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+    .theme-btn { cursor: pointer; font-size: 20px; }
+
+    .tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--border); }
+    .tab-btn { flex: 1; border: none; padding: 12px; cursor: pointer; font-size: 11px; font-weight: bold; color: #94a3b8; background: none; }
+    .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: rgba(0, 120, 212, 0.05); }
+
+    .container { padding: 15px; min-height: 450px; }
+    .aba-content { display: none; }
+    .aba-content.active { display: block; }
+
+    .card { background: var(--card); border-radius: 12px; padding: 15px; border: 1px solid var(--border); margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 12px; font-weight: bold; color: var(--primary); }
+    
+    textarea, input { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 10px; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+    
+    .trash { cursor: pointer; border: none; background: #fee2e2; color: #ef4444; padding: 6px 10px; border-radius: 6px; font-size: 14px; transition: 0.2s; }
+    .trash:hover { background: #ef4444; color: white; }
+
+    /* Estilo para suportar 20 scripts com rolagem */
+    #gridScripts { max-height: 350px; overflow-y: auto; padding-right: 5px; }
+    .script-row { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .script-row input { width: 22px; height: 22px; accent-color: var(--primary); }
+    .script-row textarea { height: 40px; resize: none; }
+
+    .btn-main { flex: 1; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; transition: 0.2s; }
+    .btn-start { background: var(--success); } .btn-pause { background: var(--warning); color: #111; } .btn-stop { background: var(--danger); }
+    
+    .stats { display: flex; gap: 10px; margin-bottom: 15px; }
+    .stat-box { flex: 1; background: var(--card); padding: 12px; border-radius: 10px; text-align: center; border: 1px solid var(--border); }
+    .stat-val { font-size: 20px; font-weight: bold; color: var(--primary); }
+  </style>
+</head>
+<body>
+  <div class="header">ADSUMUS PRO <span id="themeBtn" class="theme-btn">🌓</span></div>
+  <div class="tabs">
+    <button class="tab-btn active" data-target="envio">DISPARO</button>
+    <button class="tab-btn" data-target="scripts">SCRIPTS</button>
+    <button class="tab-btn" data-target="config">AJUSTES</button>
+    <button class="tab-btn" data-target="relatorio">RELATÓRIO</button>
+  </div>
+
+  <div class="container">
+    <div id="envio" class="aba-content active">
+      <div class="card">
+        <div class="card-title">Números de Envio <button id="delNums" class="trash">🗑️</button></div>
+        <textarea id="numeros" rows="6" placeholder="Um número por linha..."></textarea>
+      </div>
+      <div class="card" style="text-align: center;">
+        <div style="font-size: 13px; font-weight: bold; margin-bottom: 8px;">
+          <span id="led" style="width:10px;height:10px;border-radius:50%;background:#94a3b8;display:inline-block;margin-right:5px;"></span>
+          <span id="statusTxt">Aguardando</span>
+        </div>
+        <div style="background:rgba(0,0,0,0.1);height:8px;border-radius:4px;overflow:hidden;margin-bottom:8px;">
+          <div id="bar" style="background:var(--success);width:0%;height:100%;transition:0.4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:bold;">
+          <span id="prog">0 / 0</span> <span id="tempo">Tempo: --:--</span>
+        </div>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button id="start" class="btn-main btn-start">INICIAR</button>
+        <button id="pause" class="btn-main btn-pause">PAUSAR</button>
+        <button id="stop" class="btn-main btn-stop">PARAR</button>
+      </div>
+    </div>
+
+    <div id="scripts" class="aba-content">
+      <div class="card">
+        <div class="card-title">Até 20 Scripts Aleatórios <button id="delScripts" class="trash">🗑️</button></div>
+        <div id="gridScripts"></div>
+      </div>
+    </div>
+
+    <div id="config" class="aba-content">
+      <div class="card">
+        <div class="card-title">Configurar Tempo</div>
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1"><label style="font-size:10px;font-weight:bold;">MÍN (SEG)</label><input type="number" id="min" value="15"></div>
+          <div style="flex:1"><label style="font-size:10px;font-weight:bold;">MÁX (SEG)</label><input type="number" id="max" value="30"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="relatorio" class="aba-content">
+      <div class="stats">
+        <div class="stat-box"><span class="stat-val" id="stTotal">0</span><div style="font-size:10px">TOTAL</div></div>
+        <div class="stat-box"><span class="stat-val" id="stOk" style="color:var(--success)">0</span><div style="font-size:10px">SUCESSO</div></div>
+      </div>
+      <button id="exportExcel" style="width:100%; background:var(--primary); color:white; border:none; padding:12px; border-radius:8px; font-weight:bold; cursor:pointer; margin-bottom:10px;">📥 EXPORTAR RELATÓRIO (EXCEL)</button>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <table style="width:100%; font-size:11px; border-collapse:collapse;">
+          <thead><tr style="background:rgba(0,0,0,0.05)"><th>Hora</th><th>Número</th><th>Status</th></tr></thead>
+          <tbody id="logTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+V8 DISPARADOR — PROJETO ATUALIZADO
+
+A extensão Chrome está na raiz deste diretório e o backend está em ./backend.
+
+Para instalar a extensão: extraia o ZIP, abra chrome://extensions, ative o Modo do desenvolvedor, clique em Carregar sem compactação e selecione esta pasta extraída. O manifest.json está diretamente na raiz.
+
+Para executar o backend:
+cd backend
+cp .env.example .env
+npm install
+npm test
+npm start
+
+Leia STATUS_IMPLEMENTACOES.md para conhecer o estado real das integrações e as configurações ainda necessárias. Não há credenciais reais incluídas.

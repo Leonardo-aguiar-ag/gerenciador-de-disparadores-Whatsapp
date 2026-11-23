@@ -1,0 +1,17 @@
+/* Efeito de desfoque profissional inspirado no Premium Sender */
+.adsumus-blur-nomes span[title], 
+.adsumus-blur-nomes ._ak8j { 
+    filter: blur(6px) !important; 
+    transition: 0.3s; 
+}
+.adsumus-blur-nomes span[title]:hover { filter: blur(0) !important; }
+
+.adsumus-blur-fotos img { 
+    filter: blur(15px) !important; 
+}
+
+.adsumus-blur-msgs .copyable-text, 
+.adsumus-blur-msgs ._ak8h { 
+    filter: blur(10px) !important; 
+}
+.adsumus-blur-msgs .copyable-text:hover { filter: blur(0) !important; }

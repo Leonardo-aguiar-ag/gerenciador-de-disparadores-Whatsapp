@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root { --primary: #0078d4; --success: #25d366; --danger: #ef4444; --warning: #f59e0b; --info: #0ea5e9; --bg: #f3f4f6; --card: #ffffff; --text: #1f2937; --border: #e5e7eb; }
+    body.dark { --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --border: #334155; }
+    body { width: 480px; font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; color: var(--text); }
+    .header { background: var(--primary); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+    .theme-btn { cursor: pointer; font-size: 20px; }
+    .tabs { display: flex; background: var(--card); border-bottom: 1px solid var(--border); }
+    .tab-btn { flex: 1; border: none; padding: 12px; cursor: pointer; font-size: 11px; font-weight: bold; color: #94a3b8; background: none; }
+    .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: rgba(0, 120, 212, 0.05); }
+    .container { padding: 15px; min-height: 450px; position: relative; }
+    .aba-content { display: none; }
+    .aba-content.active { display: block; }
+    .card { background: var(--card); border-radius: 12px; padding: 12px; border: 1px solid var(--border); margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    .card-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; font-weight: bold; color: var(--primary); }
+    textarea, input[type="number"], input[type="text"] { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px; box-sizing: border-box; background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+    .trash { cursor: pointer; border: none; background: #fee2e2; color: #ef4444; padding: 5px 8px; border-radius: 6px; font-size: 14px; }
+    #gridScripts { max-height: 250px; overflow-y: auto; padding-right: 5px; }
+    .script-row { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+    .script-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--primary); }
+    .script-row textarea { height: 35px; resize: none; }
+    .btn-main { flex: 1; padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; color: white; }
+    .btn-start { background: var(--success); } .btn-pause { background: var(--warning); color: #111; } .btn-stop { background: var(--danger); }
+    .stats { display: flex; gap: 4px; margin-bottom: 15px; }
+    .stat-box { flex: 1; background: var(--card); padding: 8px 4px; border-radius: 8px; text-align: center; border: 1px solid var(--border); }
+    .stat-val { font-size: 16px; font-weight: bold; display: block; }
+    .stat-label { font-size: 8px; font-weight: bold; margin-top: 2px; }
+    
+    /* MODAL DE IMPORTAÇÃO (Configurações) */
+    #modalImport { display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:999; align-items:center; justify-content:center; border-radius: 8px; }
+    .modal-box { background: var(--card); padding: 20px; border-radius: 12px; width: 80%; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid var(--border); }
+    .radio-group { margin-bottom: 15px; }
+    .radio-group label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: bold; cursor: pointer; margin-bottom: 5px; }
+    .radio-group small { display: block; margin-left: 25px; color: #888; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="header">ADSUMUS PRO v3.1 <span id="themeBtn" class="theme-btn">🌓</span></div>
+  <div class="tabs">
+    <button class="tab-btn active" data-target="envio">DISPARO</button>
+    <button class="tab-btn" data-target="scripts">SCRIPTS</button>
+    <button class="tab-btn" data-target="config">AJUSTES</button>
+    <button class="tab-btn" data-target="relatorio">RELATÓRIO</button>
+  </div>
+  
+  <div class="container">
+    
+    <div id="modalImport">
+      <div class="modal-box">
+        <h3 style="margin-top:0; color:var(--primary); font-size:15px; border-bottom: 1px solid var(--border); padding-bottom:8px;">Opções de Importação</h3>
+        
+        <div class="radio-group">
+          <label><input type="radio" name="tipoImport" value="auto" checked> Busca Automática</label>
+          <small>Procura números válidos em qualquer coluna.</small>
+        </div>
+        
+        <div class="radio-group" style="margin-bottom: 25px;">
+          <label><input type="radio" name="tipoImport" value="coluna"> Coluna Específica</label>
+          <div style="margin-left: 25px; margin-top: 5px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; font-weight:bold;">Letra:</span>
+            <input type="text" id="letraColuna" placeholder="Ex: A, B, C" maxlength="1" style="width:70px; text-transform:uppercase; text-align:center;">
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px;">
+          <button id="btnConfirmaImport" class="btn-main btn-start" style="padding:10px; font-size:12px;">IMPORTAR PLANILHA</button>
+          <button id="btnCancelaImport" class="btn-main btn-stop" style="padding:10px; font-size:12px;">CANCELAR</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="envio" class="aba-content active">
+      <div class="card">
+        <div class="card-title">Números 
+          <div>
+            <button id="btnAbrirModal" title="Importar Planilha CSV" style="cursor:pointer; border:none; background:var(--info); color:white; padding:5px 8px; border-radius:5px; font-weight:bold;">📥 LER PLANILHA</button>
+            <button id="delNums" class="trash">🗑️</button>
+          </div>
+        </div>
+        <textarea id="numeros" rows="4" placeholder="Cole ou importe números..."></textarea>
+        <input type="file" id="inputPlanilha" accept=".csv, text/csv" style="display:none;">
+      </div>
+      <div class="card">
+        <div class="card-title">Anexo (Enviar para o cliente) <button id="delAnexo" class="trash">🗑️</button></div>
+        <input type="file" id="arquivoAnexo" accept="image/*,application/pdf,.xlsx,.xls,.csv" style="font-size:11px;">
+        <small id="anexoNome" style="font-size:10px; color:var(--success); font-weight:bold;"></small>
+      </div>
+      <div class="card">
+        <div style="background:rgba(0,0,0,0.1);height:6px;border-radius:4px;overflow:hidden;margin-bottom:8px;"><div id="bar" style="background:var(--success);width:0%;height:100%;"></div></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;font-weight:bold;"><span id="prog">0/0</span><span id="tempo">--:--</span></div>
+      </div>
+      <div style="display:flex; gap:8px;"><button id="start" class="btn-main btn-start">INICIAR</button><button id="pause" class="btn-main btn-pause">PAUSAR</button><button id="stop" class="btn-main btn-stop">PARAR</button></div>
+    </div>
+
+    <div id="scripts" class="aba-content"><div class="card"><div class="card-title">Scripts <button id="delScripts" class="trash">🗑️</button></div><div id="gridScripts"></div></div></div>
+    <div id="config" class="aba-content">
+      <div class="card"><b>Atraso (Segundos)</b><div style="display:flex; gap:10px; margin-top:10px;"><input type="number" id="min" value="15"><input type="number" id="max" value="30"></div></div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><input type="checkbox" id="chkLote" checked><label>Uso de Lotes</label></div>
+        <div style="display:flex; justify-content:space-between;"><label style="font-size:11px;">Pausar a cada:</label><input type="number" id="loteQtd" value="50" style="width:60px;"></div>
+        <div style="display:flex; justify-content:space-between; margin-top:5px;"><label style="font-size:11px;">Descanso (seg):</label><input type="number" id="lotePausa" value="30" style="width:60px;"></div>
+      </div>
+    </div>
+    <div id="relatorio" class="aba-content">
+      <div class="stats">
+        <div class="stat-box"><span class="stat-val" id="stPendente" style="color:var(--warning)">0</span><div class="stat-label">PENDENTE</div></div>
+        <div class="stat-box"><span class="stat-val" id="stFracassada" style="color:var(--danger)">0</span><div class="stat-label">FALHAS</div></div>
+        <div class="stat-box"><span class="stat-val" id="stEnviei" style="color:var(--success)">0</span><div class="stat-label">ENVIADOS</div></div>
+        <div class="stat-box"><span class="stat-val" id="stDuplicar" style="color:var(--info)">0</span><div class="stat-label">DUPLICADOS</div></div>
+        <div class="stat-box"><span class="stat-val" id="stTotal">0</span><div class="stat-label">TOTAL</div></div>
+      </div>
+      <button id="exportExcel" style="width:100%; background:var(--primary); color:white; border:none; padding:10px; border-radius:8px; font-weight:bold; cursor:pointer;">📥 EXPORTAR RELATÓRIO</button>
+      <div class="card" style="padding:0; margin-top:10px;"><table style="width:100%; font-size:10px; border-collapse:collapse;"><tbody id="logTbody"></tbody></table></div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

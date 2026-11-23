@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  body { width: 420px; font-family: 'Segoe UI', sans-serif; background: #f0f2f5; margin: 0; }
+  .header { background: #004a99; color: white; padding: 15px; text-align: center; font-weight: bold; font-size: 16px; }
+  .tabs { display: flex; background: #e9ecef; border-bottom: 1px solid #ddd; }
+  .tab-btn { flex: 1; border: none; padding: 12px; cursor: pointer; font-weight: bold; color: #555; background: transparent; }
+  .tab-btn.active { background: white; color: #004a99; border-bottom: 3px solid #004a99; }
+  .container { padding: 15px; }
+  .aba-content { display: none; }
+  .aba-content.active { display: block; }
+  .box { background: white; padding: 15px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #ddd; }
+  
+  /* Organização da Aba Scripts */
+  .script-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 8px; border-bottom: 1px solid #f8f9fa; }
+  .script-row input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; flex-shrink: 0; accent-color: #004a99; }
+  .script-row textarea { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ced4da; font-size: 13px; resize: none; height: 40px; }
+  
+  .progress-bg { background: #e9ecef; border-radius: 10px; height: 12px; overflow: hidden; margin: 10px 0; }
+  .progress-bar { background: #25d366; height: 100%; width: 0%; transition: 0.5s; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+  .btn { flex: 1; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; }
+  .start { background: #25d366; }
+  .pause { background: #ffc107; color: #333; }
+  .stop { background: #dc3545; }
+  label { font-weight: bold; color: #444; font-size: 12px; display: block; margin-bottom: 5px; }
+</style>
+</head>
+<body>
+  <div class="header">HAPVIDA SENDER PRO</div>
+  <div class="tabs">
+    <button class="tab-btn active" data-target="disparo">DISPARO</button>
+    <button class="tab-btn" data-target="scripts">SCRIPTS</button>
+    <button class="tab-btn" data-target="config">CONFIG</button>
+  </div>
+
+  <div class="container">
+    <div id="disparo" class="aba-content active">
+      <div class="box">
+        <textarea id="numeros" rows="6" style="width:100%; border: 1px solid #ced4da; border-radius: 6px; padding: 8px;" placeholder="85999999999 (Um por linha)"></textarea>
+      </div>
+      <div class="box">
+        <div class="progress-bg"><div id="bar" class="progress-bar"></div></div>
+        <div style="display:flex; justify-content: space-between; font-size: 12px; font-weight: bold;">
+          <span>Progresso: <span id="prog">0/0</span></span>
+          <span>Tempo Restante: <span id="tempo">--:--</span></span>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="btnStart" class="btn start">INICIAR</button>
+        <button id="btnPause" class="btn pause">PAUSAR</button>
+        <button id="btnStop" class="btn stop">PARAR</button>
+      </div>
+    </div>
+
+    <div id="scripts" class="aba-content">
+      <div id="scripts-container"></div>
+    </div>
+
+    <div id="config" class="aba-content">
+      <div class="box">
+        <label>Delay Mínimo (seg):</label>
+        <input type="number" id="min" value="15" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ced4da;">
+        <label style="margin-top:10px;">Delay Máximo (seg):</label>
+        <input type="number" id="max" value="30" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ced4da;">
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

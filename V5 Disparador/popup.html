@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<script src="xlsx.full.min.js"></script>
+<style>
+    :root { --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --sub: #94a3b8; --border: #334155; --input: #0f172a; --accent: #3b82f6; }
+    body.light-mode { --bg: #f1f5f9; --card: #ffffff; --text: #1e293b; --sub: #64748b; --border: #e2e8f0; --input: #f8fafc; --accent: #2563eb; }
+    * { box-sizing: border-box; }
+    body { width: 450px; margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; transition: 0.3s; padding-bottom: 50px; }
+    .header { display: flex; align-items: center; justify-content: space-between; padding: 15px 20px; background: var(--card); border-bottom: 1px solid var(--border); }
+    .header-profile { display: flex; align-items: center; gap: 12px; }
+    .header img { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; }
+    #themeToggle { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    .tabs { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .tabs button { flex: 1; padding: 12px 0; border: none; background: transparent; color: var(--sub); font-weight: 600; font-size: 12px; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tabs button.active { color: var(--accent); border-bottom: 2px solid var(--accent); }
+    .aba { display: none; padding: 15px; height: 450px; overflow-y: auto; }
+    .aba.active { display: block; }
+    .box { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border); position: relative; }
+    label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sub); margin-bottom: 8px; font-weight: 700; }
+    textarea, input, select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--input); color: var(--text); font-size: 13px; outline: none; transition: 0.2s; }
+    textarea:focus, select:focus, input:focus { border-color: var(--accent); }
+    .btn-trash { position: absolute; right: 25px; bottom: 30px; width: 36px; height: 36px; background: #ef444422; color: #ef4444; border: 1px solid #ef4444; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn-trash:hover { background: #ef4444; color: #fff; transform: scale(1.05); }
+    .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-weight: 700; cursor: pointer; color: #fff; transition: 0.2s; margin-bottom: 8px; font-size: 13px; }
+    .btn-success { background: #10b981; box-shadow: 0 4px 12px #10b98144; }
+    .btn-success:disabled { background: #64748b; cursor: not-allowed; opacity: 0.5; box-shadow: none; }
+    .btn-warning { background: #f59e0b; }
+    .btn-danger { background: #ef4444; }
+    .btn-primary { background: var(--accent); }
+    .wa-status-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: var(--card); border-top: 2px solid var(--border); position: fixed; bottom: 0; left: 0; width: 100%; z-index: 100; font-size: 12px; font-weight: 700; transition: 0.3s; }
+    .wa-status-bar.online { border-top-color: #10b981; }
+    .wa-status-bar.online #wa-text { color: #10b981; }
+    .wa-status-bar.offline { border-top-color: #ef4444; }
+    .wa-status-bar.offline #wa-text { color: #ef4444; }
+    .progress-container { margin-top: 15px; }
+    .progress-info { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+    .progress-bg { height: 10px; background: var(--border); border-radius: 10px; overflow: hidden; }
+    .progress-bar { height: 100%; background: #10b981; width: 0%; transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+    .time-panel { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; background: var(--bg); padding: 12px; border-radius: 10px; border: 1px solid var(--border); }
+    .time-item { text-align: center; }
+    .time-label { font-size: 9px; color: var(--sub); text-transform: uppercase; font-weight: 800; margin-bottom: 4px; }
+    .time-value { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    #valEstimado { color: var(--accent); }
+    #valDecorrido { color: #f59e0b; }
+    .crm-dashboard { display: flex; gap: 8px; margin-bottom: 12px; }
+    .dash-card { flex: 1; background: var(--card); border: 1px solid var(--border); padding: 8px; border-radius: 8px; text-align: center; }
+    .dash-card span { display: block; font-size: 9px; text-transform: uppercase; color: var(--sub); font-weight: bold; margin-bottom: 3px; }
+    .dash-card b { font-size: 14px; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-profile">
+        <img src="foto perfil.jpeg" alt="Perfil" onerror="this.src='https://ui-avatars.com/api/?name=L&background=3b82f6&color=fff'">
+        <div>
+            <div style="font-weight: 700; font-size: 15px;">Private Bot</div>
+            <div style="font-size: 10px; color: var(--sub); font-weight: 600;">V4.0 • Leonardo Aguiar</div>
+        </div>
+    </div>
+    <button id="themeToggle">🌙</button>
+</div>
+
+<div class="tabs">
+    <button class="tab-btn active" data-target="disparo">DISPARO</button>
+    <button class="tab-btn" data-target="scripts">SCRIPTS</button>
+    <button class="tab-btn" data-target="crm">CRM</button>
+    <button class="tab-btn" data-target="config">CONFIG</button>
+</div>
+
+<div id="disparo" class="aba active">
+    <div class="box">
+        <label>Lista de Contatos (Número;Nome)</label>
+        <textarea id="numeros" placeholder="85999999999;João&#10;85888888888;Maria" style="height: 140px; margin-bottom: 0; padding-right: 45px;"></textarea>
+        <button id="btnLimparNumeros" class="btn-trash" title="Apagar todos os números">🗑</button>
+    </div>
+
+    <button id="btnStart" class="btn btn-success" disabled>▶ INICIAR DISPARO</button>
+    <div style="display:flex; gap:10px;">
+        <button id="btnPause" class="btn btn-warning">⏸ PAUSAR</button>
+        <button id="btnStop" class="btn btn-danger">⏹ PARAR</button>
+    </div>
+
+    <div class="progress-container">
+        <div class="progress-info"><span id="txtEnvios">0 / 0 enviados</span><span id="percent" style="color: #10b981;">0%</span></div>
+        <div class="progress-bg"><div id="bar" class="progress-bar"></div></div>
+    </div>
+
+    <div class="time-panel">
+        <div class="time-item"><div class="time-label">⌛ ESTIMATIVA TOTAL</div><div id="valEstimado" class="time-value">00:00:00</div></div>
+        <div class="time-item"><div class="time-label">⏱️ DURAÇÃO ATUAL</div><div id="valDecorrido" class="time-value">00:00:00</div></div>
+    </div>
+    <div id="statusCampanha" style="text-align:center; font-size:11px; margin-top:12px; color:var(--sub); font-weight: 600;">Aguardando comando...</div>
+</div>
+
+<div id="scripts" class="aba">
+    <div class="box" style="padding: 12px; margin-bottom: 12px;">
+        <label style="margin-bottom: 5px;">Selecione ou Crie Campanhas</label>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+            <select id="selCampanha" style="padding: 8px; flex: 1;"><option value="">-- Scripts Atuais em Edição --</option></select>
+            <button id="btnDeletarCampanha" class="btn btn-danger" style="width: 40px; margin: 0; padding: 0;" title="Excluir esta campanha">🗑</button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; background: var(--bg); padding: 10px; border-radius: 8px; border: 1px solid var(--border); margin-top: 8px;">
+            <input type="text" id="nomeNovaCampanha" placeholder="Nome da Nova Campanha (Ex: Hapvida PF)" style="padding: 8px; font-size: 12px;">
+            <div style="display: flex; gap: 6px;"><button id="btnSalvarCampanha" class="btn btn-primary" style="margin: 0; padding: 8px; font-size: 11px;">💾 SALVAR / ATUALIZAR</button></div>
+        </div>
+    </div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding: 0 5px;">
+        <label style="margin: 0;">Mensagens (Use [NOME] e Spintax: {Oi|Olá})</label>
+        <button id="btnLimparScripts" class="btn" style="width: auto; background: #ef444422; color: #ef4444; margin: 0; padding: 5px 10px; font-size: 10px; border: 1px solid #ef444444;">🗑 LIMPAR CAMPOS</button>
+    </div>
+
+    <!-- NOVOS BOTÕES DE IMPORTAÇÃO/EXPORTAÇÃO -->
+    <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+        <button id="btnImportarScripts" class="btn btn-primary" style="margin: 0; padding: 8px; font-size: 11px;">📥 IMPORTAR SCRIPTS</button>
+        <button id="btnExportarScripts" class="btn btn-success" style="margin: 0; padding: 8px; font-size: 11px;">📤 EXPORTAR SCRIPTS</button>
+    </div>
+    <input type="file" id="inputScripts" accept=".txt,.json" style="display:none;">
+    <!-- FIM DOS NOVOS BOTÕES -->
+
+    <div id="contScripts"></div>
+</div>
+
+<div id="crm" class="aba">
+    <div class="crm-dashboard">
+        <div class="dash-card"><span>Total</span><b id="crmTotal">0</b></div>
+        <div class="dash-card"><span>Sucesso</span><b id="crmOk" style="color:#10b981;">0</b></div>
+        <div class="dash-card"><span>Erros</span><b id="crmErro" style="color:#ef4444;">0</b></div>
+        <div class="dash-card"><span>Repetidos</span><b id="crmDupl" style="color:#f59e0b;">0</b></div>
+    </div>
+    <div class="box" style="display:flex; gap:8px; padding: 10px;">
+        <input type="text" id="crmBusca" placeholder="Pesquisar por número ou nome..." style="margin:0; flex:1;">
+        <button id="btnBuscar" class="btn btn-primary" style="width: 45px; margin:0;">🔍</button>
+        <button id="btnExportar" class="btn btn-success" style="width: auto; margin:0; padding: 0 15px;" title="Exportar para Excel">📥</button>
+        <button id="btnLimparCRM" class="btn btn-danger" style="width: 45px; margin:0;" title="Zerar Histórico">🗑</button>
+    </div>
+    <div class="box" style="padding: 5px; max-height: 250px; overflow-y: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;">
+            <thead style="background: var(--bg); position: sticky; top: 0; z-index: 1;">
+                <tr><th style="padding: 8px; width: 25px; color: var(--sub);">#</th><th style="padding: 8px; color: var(--sub);">Nome</th><th style="padding: 8px; color: var(--sub);">Número</th><th style="padding: 8px; color: var(--sub);">Status</th><th style="padding: 8px; color: var(--sub);">Horário</th><th style="padding: 8px; text-align: right; color: var(--sub);">Chat</th></tr>
+            </thead>
+            <tbody id="crmBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="config" class="aba">
+    <div class="box">
+        <label>Controle de Delay (Anti-Ban)</label>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <input id="minDelay" type="number" value="15"> <span style="font-size:11px; color:var(--sub)">até</span> <input id="maxDelay" type="number" value="30"> <span style="font-size:11px; color:var(--sub)">seg</span>
+        </div>
+        <label style="margin-top:20px;">Pausa por Lote</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="chkPausaLote" style="width:16px; height:16px;"> <span style="font-size:12px;">Pausar a cada <input id="qtdLote" type="number" value="20" style="width:50px; padding:4px; margin:0"> envios</span>
+        </div>
+        <div style="margin-top:10px; font-size:12px; margin-left: 24px;">Tempo de pausa: <input id="tempoLote" type="number" value="5" style="width:50px; padding:4px; margin:0"> min</div>
+        <p style="font-size:11px; color:#10b981; margin-top:25px; text-align:center; font-weight: bold;">✓ Integração Google Sheets Automatizada (5 Colunas Ativas)</p>
+        <button id="salvarConfig" class="btn btn-primary" style="margin-top: 15px;">💾 SALVAR CONFIGURAÇÕES</button>
+        <button id="forcarConexao" class="btn btn-primary" style="margin-top:10px;">🔄 Forçar Verificação de Conexão</button>
+    </div>
+</div>
+
+<div id="wa-status-bar" class="wa-status-bar offline">
+    <div style="display:flex; align-items:center; gap:8px;"><span id="wa-icon" style="font-size:14px;">🔴</span><span id="wa-text">Esperando conectar o WhatsApp...</span></div>
+    <div id="wa-chip" style="display:none; background:#10b98122; color:#10b981; padding:3px 10px; border-radius:12px; font-size:10px; font-weight:800; letter-spacing:0.5px; border:1px solid #10b98144;"></div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

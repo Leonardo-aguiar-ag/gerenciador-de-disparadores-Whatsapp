@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Disparador Adsumus Pro v2.4.1",
+  "version": "2.4.1",
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "action": { "default_popup": "popup.html" },
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [{
+    "matches": ["https://web.whatsapp.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "host_permissions": ["https://web.whatsapp.com/*"]
+}

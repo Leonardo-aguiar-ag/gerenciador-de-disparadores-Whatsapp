@@ -1,0 +1,8 @@
+{
+  "campaigns": [{ "id": "string", "name": "string", "status": "draft|active|paused|completed", "channel": "cloud_api", "createdAt": "ISO-8601", "updatedAt": "ISO-8601", "metadata": "object" }],
+  "contacts": [{ "id": "string", "name": "string", "phone": "string", "optedOut": "boolean", "tags": "string[]", "funnelStage": "string", "fields": "object", "history": "object[]", "createdAt": "ISO-8601", "updatedAt": "ISO-8601" }],
+  "messages": [{ "id": "string", "campaignId": "string|null", "contactId": "string|null", "to": "string", "body": "string", "type": "text|image|video|audio|document|template", "media": "object|null", "state": "pending|processing|sent|delivered|read|failed|cancelled", "attempts": "number", "maxAttempts": "number", "eventId": "string|null", "providerMessageId": "string|null", "error": "string|null", "createdAt": "ISO-8601", "updatedAt": "ISO-8601" }],
+  "optOuts": [{ "phone": "string", "reason": "string", "createdAt": "ISO-8601" }],
+  "processedEvents": [{ "eventId": "string", "createdAt": "ISO-8601" }],
+  "settings": [{ "id": "string", "key": "googleSheets", "value": "object", "updatedAt": "ISO-8601" }]
+}
