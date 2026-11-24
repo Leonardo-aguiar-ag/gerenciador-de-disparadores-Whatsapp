@@ -9,19 +9,39 @@ import { parseContactList, parseContactLine } from '../../shared/phone.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-test('scripts de conteúdo usam uma única injeção programática e sintaxe válida', () => {
+test('content scripts são declarados uma única vez e na ordem correta', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
   const contentScripts = ['content/whatsapp-adapter.js', 'content/content-legacy.js'];
 
-  assert.equal(manifest.content_scripts, undefined, 'não deve haver injeção declarativa duplicada');
+  assert.deepEqual(manifest.content_scripts, [{
+    matches: ['https://web.whatsapp.com/*'],
+    js: contentScripts,
+    run_at: 'document_idle',
+    all_frames: false
+  }]);
+  assert.ok(!manifest.permissions.includes('scripting'), 'não deve manter permissão de injeção programática');
   for (const relativePath of contentScripts) {
     const file = path.join(root, relativePath);
-    assert.ok(fs.existsSync(file), `arquivo declarado não encontrado: ${relativePath}`);
+    assert.ok(fs.existsSync(file), \`arquivo declarado não encontrado: \${relativePath}\`);
     const source = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(source, /^\s*(?:import|export)\s/m, `${relativePath} usa sintaxe de módulo, incompatível com content_scripts`);
+    assert.doesNotMatch(source, /^\s*(?:import|export)\s/m, \`\${relativePath} usa sintaxe de módulo, incompatível com content_scripts clássicos\`);
     const check = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
-    assert.equal(check.status, 0, `${relativePath} tem erro de sintaxe: ${check.stderr}`);
+    assert.equal(check.status, 0, \`\${relativePath} tem erro de sintaxe: \${check.stderr}\`);
   }
+});
+
+test('popup referencia somente IDs existentes e não reinjeta content scripts', () => {
+  const html = fs.readFileSync(path.join(root, 'popup/popup.html'), 'utf8');
+  const popup = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
+  const ids = new Set([...html.matchAll(/\bid=["']([^"']+)["']/g)].map(match => match[1]));
+  const references = [...popup.matchAll(/\$\(['"]([^'"]+)['"]\)/g)].map(match => match[1]);
+  const optionalIds = new Set(['undo']);
+  const missing = [...new Set(references)].filter(id => !ids.has(id) && !optionalIds.has(id));
+
+  assert.deepEqual(missing, [], \`IDs do popup não encontrados no HTML: \${missing.join(', ')}\`);
+  assert.doesNotMatch(popup, /\$\(['"]#/);
+  assert.doesNotMatch(popup, /chrome\.scripting\.executeScript/);
+  assert.match(popup, /Content script do WhatsApp Web não respondeu/);
 });
 
 test('importação de scripts aceita TXT por blocos e JSON compatível com a V9/V10', () => {
@@ -60,13 +80,15 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(popup, /function sendMessageSafe/);
   assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
   assert.match(popup, /chrome\.tabs\.onUpdated/);
-  assert.match(popup, /const backoff = \[500, 1000, 2000\]/);
-  assert.match(popup, /Não foi possível preparar o WhatsApp Web/);
+  assert.match(popup, /const backoff = \[300, 800, 1500\]/);
+  assert.match(popup, /Content script do WhatsApp Web não respondeu/);
   assert.match(popup, /Falha na conexão: \$\{error\.message\}/);
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
-  assert.match(content, /conversation-panel-wrapper/);
-  assert.match(content, /function elementoVisivel/);
+  assert.match(content, /window\\.__v10IsWhatsAppReady/);
+  assert.doesNotMatch(content, /function elementoVisivel|primeiroVisivel/);
   assert.match(adapter, /function isVisible/);
+  assert.match(adapter, /function isWhatsAppReady/);
+  assert.match(adapter, /ready: true/);
   assert.match(adapter, /chat-list-search/);
   assert.doesNotMatch(content, /document\.querySelector\([^\n]*canvas/);
   assert.match(content, /if \(!dispatchState\.rodando\).*Não existe disparo ativo para pausar/);

@@ -49,48 +49,27 @@ if (!window.botListenerAdded) {
 
     /* CONEXÃO */
     let ultimoEstadoConectado = null;
-    function elementoVisivel(element) {
-        if (!element) return false;
-        const style = window.getComputedStyle(element);
-        return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 && element.getClientRects().length > 0;
-    }
-    function primeiroVisivel(selectors) {
-        return [...document.querySelectorAll(selectors)].find(elementoVisivel) || null;
-    }
     function verificarConexao() {
         try {
-            if (typeof window.__v10IsWhatsAppReady === 'function') {
-                const readiness = window.__v10IsWhatsAppReady();
-                const conectado = Boolean(readiness.ready);
-                dispatchState.numeroConta = 'Número Oculto';
-                sendMsg({ acao: "wa_status", info: { conectado, numero: dispatchState.numeroConta, nome: conectado ? "Conta Autenticada" : readiness.reason } });
-                if (conectado && ultimoEstadoConectado !== true) { ultimoEstadoConectado = true; sendMsg({ acao: "content_ready", numero: dispatchState.numeroConta, nome: "Conta Autenticada" }); }
-                else if (!conectado) ultimoEstadoConectado = false;
-                return conectado;
-            }
-            const painel = primeiroVisivel('#pane-side, [data-testid="conversation-panel-wrapper"], [data-testid="chat-list"], [data-testid="chat-list-search"]');
-            const qr = primeiroVisivel('[data-testid="qrcode"], [data-testid="qr-code"], [aria-label*="QR code" i], [aria-label*="código QR" i]');
-            const input = primeiroVisivel('footer div[contenteditable="true"], div[contenteditable="true"][role="textbox"]');
-            let conectado = false, numero = "Número Oculto", nome = "Conta Autenticada";
-            if ((painel || input) && !qr) {
-                conectado = true;
-                let rawNum = window.localStorage.getItem('last-wid-md') || window.localStorage.getItem('last-wid') || document.body.getAttribute('data-number') || "";
-                numero = rawNum.replace(/[^0-9]/g, '');
-                if (numero.length < 8) numero = "Número Oculto";
-                let rawNome = window.localStorage.getItem('smb_business_name') || window.localStorage.getItem('pushname') || window.localStorage.getItem('name') || document.querySelector('header ._amkf')?.innerText || "";
-                nome = rawNome.replace(/"/g, '').trim();
-                if (!nome || nome === "undefined" || nome === "null") nome = "Conta Autenticada";
-            }
-            dispatchState.numeroConta = numero;
-            sendMsg({ acao: "wa_status", info: { conectado, numero, nome } });
+            const readiness = typeof window.__v10IsWhatsAppReady === 'function'
+                ? window.__v10IsWhatsAppReady()
+                : { ready: false, reason: 'adaptador_indisponivel', etapa: 'boot' };
+            const conectado = readiness.ready === true;
+            dispatchState.numeroConta = 'Número Oculto';
+            console.log('[V10][content] verificarConexao', readiness);
+            sendMsg({ acao: "wa_status", info: { conectado, numero: dispatchState.numeroConta, nome: conectado ? "Conta Autenticada" : readiness.reason } });
             if (conectado && ultimoEstadoConectado !== true) {
                 ultimoEstadoConectado = true;
-                sendMsg({ acao: "content_ready", numero, nome });
+                sendMsg({ acao: "content_ready", numero: dispatchState.numeroConta, nome: "Conta Autenticada" });
             } else if (!conectado) {
                 ultimoEstadoConectado = false;
             }
             return conectado;
-        } catch (e) { sendMsg({ acao: "wa_status", info: { conectado: false } }); return false; }
+        } catch (error) {
+            console.error('[V10][content] falha ao verificar conexão', error);
+            sendMsg({ acao: "wa_status", info: { conectado: false, numero: "Número Oculto", nome: error.message } });
+            return false;
+        }
     }
     setInterval(verificarConexao, 2000);
     verificarConexao();
@@ -247,7 +226,7 @@ if (!window.botListenerAdded) {
     async function enviarMensagem(numero, texto) {
         ID_DISPARO++;
         const idAtual = ID_DISPARO;
-        console.log("[BOT] 📤", numero);
+        console.log("[V10][content→WhatsApp] enviando mensagem", { numero, timestamp: Date.now() });
         for (let k = 0; k < 3; k++) {
             document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
             await sleep(150);
@@ -283,7 +262,7 @@ if (!window.botListenerAdded) {
         if (box.innerText.trim().length > 0) { pressionarEnter(box); await sleep(1500); }
         document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
         await sleep(300);
-        console.log("[BOT] ✅", numero);
+        console.log("[V10][content→WhatsApp] mensagem processada", { numero, timestamp: Date.now() });
         return "OK";
     }
 
@@ -308,7 +287,7 @@ if (!window.botListenerAdded) {
         dispatchState.total = fila.lista.length;
         dispatchState.enviados = fila.indice || 0;
         dispatchState.contadorLote = 0;
-        console.log("[BOT] Iniciado. Total:", fila.lista.length, "| Worker:", botWorker ? "ativo ✅" : "fallback ❌");
+        console.log("[V10][content] fila iniciada", { total: fila.lista.length, worker: botWorker ? "ativo" : "fallback", timestamp: Date.now() });
 
         for (let i = fila.indice || 0; i < fila.lista.length; i++) {
             if (!dispatchState.rodando || dispatchState.runId !== runId) break;
@@ -332,6 +311,7 @@ if (!window.botListenerAdded) {
                 sendMsg({ acao: "dispatch_concluido", limiteAtingido: true, enviados: dispatchState.enviados, total: dispatchState.total });
                 return;
             }
+            console.log("[V10][content] processando contato", { indice: i + 1, total: fila.lista.length, timestamp: Date.now() });
             const cliente = fila.lista[i];
             let numeroDestino = "", nomeCliente = "Cliente";
             if (cliente && typeof cliente === 'object') {
@@ -405,6 +385,7 @@ if (!window.botListenerAdded) {
         if (dispatchState.runId !== runId) return;
         dispatchState.rodando = false;
         dispatchState.pausado = false;
+        console.log("[V10][content] fila concluída", { enviados: dispatchState.enviados, total: dispatchState.total, timestamp: Date.now() });
         sendMsg({ acao: "dispatch_concluido", enviados: dispatchState.enviados, total: dispatchState.total });
     }
 }

@@ -74,15 +74,9 @@ async function waitForTabComplete(tabId, timeoutMs = 10000) {
 }
 async function sendMessageSafe(tabId, message) {
   await waitForTabComplete(tabId);
-  // Injeta primeiro o adaptador e depois o executor. Separar as chamadas evita
-  // que uma falha parcial deixe o executor sem a detecção de sessão, ou vice-versa.
-  // Os guards dos dois arquivos tornam a operação idempotente ao reabrir o popup.
-  try {
-    for (const file of ['content/whatsapp-adapter.js', 'content/content-legacy.js']) {
-      await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: [file] });
-    }
-  } catch (error) { throw new Error(`Não foi possível preparar o WhatsApp Web: ${error.message}`); }
-  const backoff = [500, 1000, 2000];
+  // Os content scripts são carregados pelo manifest, em ordem, ao abrir o WhatsApp Web.
+  // O retry cobre a janela entre document_idle e o registro dos listeners.
+  const backoff = [300, 800, 1500];
   let lastError = null;
   for (let attempt = 0; attempt < backoff.length; attempt++) {
     await sleep(backoff[attempt]);
@@ -90,9 +84,13 @@ async function sendMessageSafe(tabId, message) {
       const error = chrome.runtime.lastError;
       if (error) reject(new Error(error.message)); else resolve(result);
     })).catch(error => { lastError = error; return null; });
-    if (response != null) { console.log('[V10][popup→content] resposta', { acao: message.acao || message.type, attempt: attempt + 1, timestamp: Date.now() }); return response; }
+    if (response != null) {
+      console.log('[V10][popup→content] resposta', { acao: message.acao || message.type, attempt: attempt + 1, timestamp: Date.now() });
+      return response;
+    }
+    console.warn('[V10][popup] content script ainda não respondeu', { acao: message.acao || message.type, tentativa: attempt + 1, erro: lastError?.message || 'sem resposta' });
   }
-  throw new Error(`O WhatsApp Web não respondeu após 3 tentativas: ${lastError?.message || 'tempo esgotado'}`);
+  throw new Error(`Content script do WhatsApp Web não respondeu. Recarregue a aba (F5) e tente novamente. ${lastError?.message || ''}`.trim());
 }
 async function sendWhatsApp(tabId, message) { return sendMessageSafe(tabId, message); }
 async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
@@ -278,7 +276,7 @@ $('scriptsFile').onchange = async e => {
 };
 
 async function readFile(file) { const buf = await file.arrayBuffer(); if (window.XLSX && /\.(xlsx|xls)$/i.test(file.name)) { const wb = XLSX.read(buf, { type: 'array' }); return XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], { FS: ';' }); } return new TextDecoder().decode(buf); }
-$('#importContacts').onclick = () => $('file').click();
+$('importContacts').onclick = () => $('file').click();
 $('file').onchange = async e => { const input = e.target; const file = input.files?.[0]; if (!file) return; input.value = ''; try { $('contacts').value = await readFile(file); persistDraftSoon(); $('preview').click(); } catch (error) { $('previewBox').textContent = `Falha ao importar arquivo: ${error.message}`; } };
 $('preview').onclick = () => { const rows = parseContactList($('contacts').value); const valid = rows.filter(x => x.valid); const invalid = rows.length - valid.length; const box = $('previewBox'); box.replaceChildren(); const summary = document.createElement('div'); summary.textContent = `${valid.length} válidos · ${invalid} inválidos`; box.appendChild(summary); const script = getScriptPool()[0] || ''; if (!script) { const hint = document.createElement('div'); hint.textContent = 'Cadastre scripts na aba Scripts.'; box.appendChild(hint); return; } valid.slice(0, 3).forEach(contact => { const sample = document.createElement('div'); sample.textContent = processSpintax(interpolate(script, contact)); box.appendChild(sample); }); };
 function localDateKey(date = new Date()) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
