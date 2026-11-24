@@ -48,17 +48,41 @@ async function restoreActiveDispatch() {
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
 function whatsappTab() { return chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }).then(tabs => { const tab = tabs[0]; if (!tab?.id) throw new Error('Abra o WhatsApp Web e mantenha a sessão conectada.'); return tab; }); }
-function sendWhatsAppOnce(tabId, message) { return new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, response => { const error = chrome.runtime.lastError; if (error) reject(new Error(error.message)); else resolve(response); })); }
-async function sendWhatsApp(tabId, message) {
-  try { return await sendWhatsAppOnce(tabId, message); }
-  catch (error) {
-    if (!/receiving end|could not establish connection/i.test(error.message)) throw error;
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['content/content-legacy.js', 'content/whatsapp-adapter.js'] });
-    return sendWhatsAppOnce(tabId, message);
-  }
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+async function waitForTabComplete(tabId, timeoutMs = 10000) {
+  const current = await chrome.tabs.get(tabId);
+  if (current.status === 'complete') return;
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error('A aba do WhatsApp Web não terminou de carregar em 10 segundos.')); }, timeoutMs);
+    const listener = (updatedTabId, changeInfo) => {
+      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
+      clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve();
+    };
+    chrome.tabs.onUpdated.addListener(listener);
+  });
 }
+async function sendMessageSafe(tabId, message) {
+  await waitForTabComplete(tabId);
+  // A V10 usa somente injeção programática; os guards dos dois arquivos
+  // tornam a operação idempotente quando o popup é reaberto.
+  try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/whatsapp-adapter.js', 'content/content-legacy.js'] }); }
+  catch (error) { throw new Error(`Não foi possível preparar o WhatsApp Web: ${error.message}`); }
+  const backoff = [500, 1000, 2000];
+  let lastError = null;
+  for (let attempt = 0; attempt < backoff.length; attempt++) {
+    await sleep(backoff[attempt]);
+    const response = await new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, result => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message)); else resolve(result);
+    })).catch(error => { lastError = error; return null; });
+    if (response != null) { console.log('[V10][popup→content] resposta', { acao: message.acao || message.type, attempt: attempt + 1, timestamp: Date.now() }); return response; }
+  }
+  throw new Error(`O WhatsApp Web não respondeu após 3 tentativas: ${lastError?.message || 'tempo esgotado'}`);
+}
+async function sendWhatsApp(tabId, message) { return sendMessageSafe(tabId, message); }
 async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
   const tab = await whatsappTab();
+  console.log('[V10][popup→content] iniciar_disparo', { msgCount: rows.length, delay: `${cfg.minDelay || 15}-${cfg.maxDelay || 30}`, timestamp: Date.now() });
   const status = await sendWhatsApp(tab.id, { type: 'whatsapp:status' });
   if (!status?.data?.connected) throw new Error('WhatsApp Web não está conectado ou a sessão não foi reconhecida.');
   beginRun(rows);

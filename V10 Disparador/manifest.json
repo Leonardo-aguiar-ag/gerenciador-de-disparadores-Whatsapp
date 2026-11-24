@@ -6,11 +6,6 @@
   "permissions": ["storage", "tabs", "scripting", "activeTab", "alarms", "notifications", "downloads"],
   "action": { "default_popup": "popup/popup.html" },
   "background": { "service_worker": "background/service-worker.js", "type": "module" },
-  "content_scripts": [{
-    "matches": ["https://web.whatsapp.com/*"],
-    "js": ["content/content-legacy.js", "content/whatsapp-adapter.js"],
-    "run_at": "document_idle"
-  }],
   "host_permissions": [
     "https://web.whatsapp.com/*",
     "http://localhost/*",

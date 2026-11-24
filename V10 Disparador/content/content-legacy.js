@@ -59,6 +59,15 @@ if (!window.botListenerAdded) {
     }
     function verificarConexao() {
         try {
+            if (typeof window.__v10IsWhatsAppReady === 'function') {
+                const readiness = window.__v10IsWhatsAppReady();
+                const conectado = Boolean(readiness.ready);
+                dispatchState.numeroConta = 'Número Oculto';
+                sendMsg({ acao: "wa_status", info: { conectado, numero: dispatchState.numeroConta, nome: conectado ? "Conta Autenticada" : readiness.reason } });
+                if (conectado && ultimoEstadoConectado !== true) { ultimoEstadoConectado = true; sendMsg({ acao: "content_ready", numero: dispatchState.numeroConta, nome: "Conta Autenticada" }); }
+                else if (!conectado) ultimoEstadoConectado = false;
+                return conectado;
+            }
             const painel = primeiroVisivel('#pane-side, [data-testid="conversation-panel-wrapper"], [data-testid="chat-list"], [data-testid="chat-list-search"]');
             const qr = primeiroVisivel('[data-testid="qrcode"], [data-testid="qr-code"], [aria-label*="QR code" i], [aria-label*="código QR" i]');
             const input = primeiroVisivel('footer div[contenteditable="true"], div[contenteditable="true"][role="textbox"]');
@@ -157,12 +166,14 @@ if (!window.botListenerAdded) {
     /* LISTENER */
     chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
         if (req.acao === "iniciar_disparo") {
+            console.log('[V10][popup→content] iniciar_disparo recebido', { msgCount: req.fila?.lista?.length || 0, timestamp: Date.now() });
             const fila = req.fila;
             if (dispatchState.rodando) {
                 sendResponse({ accepted: false, error: "Já existe um disparo em andamento nesta aba." });
                 return true;
             }
             if (!verificarConexao()) {
+                console.warn('[V10][content] início bloqueado: sessão não pronta');
                 sendResponse({ accepted: false, error: "WhatsApp Web não está conectado. Conecte a sessão e tente novamente." });
                 return true;
             }

@@ -32,26 +32,44 @@ async function api(path, options = {}) {
 
 async function readDispatch() {
   const stored = await chrome.storage.local.get('v10ActiveDispatch');
-  return stored.v10ActiveDispatch || {};
+  if (stored.v10ActiveDispatch) return stored.v10ActiveDispatch;
+  const session = await chrome.storage.session.get('v10ActiveDispatch');
+  return session.v10ActiveDispatch || {};
 }
 
 async function saveDispatch(patch) {
   const current = await readDispatch();
-  await chrome.storage.local.set({
-    v10ActiveDispatch: { ...current, ...patch, heartbeatAt: new Date().toISOString() }
-  });
+  const snapshot = { ...current, ...patch, heartbeatAt: new Date().toISOString() };
+  await chrome.storage.local.set({ v10ActiveDispatch: snapshot });
+  await chrome.storage.session.set({ v10ActiveDispatch: snapshot });
+}
+
+async function scheduleMaintenanceAlarms() {
+  chrome.alarms.create('v10-update-check', { periodInMinutes: 1440 });
+  chrome.alarms.create('v10-weekly-backup', { periodInMinutes: 10080, delayInMinutes: 5 });
+}
+
+async function createWeeklyBackup() {
+  const data = await chrome.storage.local.get(null);
+  const date = new Date().toISOString().slice(0, 10);
+  const payload = encodeURIComponent(JSON.stringify({ format: 'v10-backup-v1', createdAt: new Date().toISOString(), extension: data }, null, 2));
+  await chrome.downloads.download({ url: `data:application/json;charset=utf-8,${payload}`, filename: `private_bot_backups/backup_${date}.json`, saveAs: false, conflictAction: 'overwrite' });
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await settings();
   await chrome.storage.local.set({ v10Settings: current, v10Version: '10.0.0' });
-  chrome.alarms.create('v10-update-check', { periodInMinutes: 1440 });
+  await scheduleMaintenanceAlarms();
 });
-chrome.runtime.onStartup.addListener(() => chrome.alarms.create('v10-update-check', { periodInMinutes: 1440 }));
+chrome.runtime.onStartup.addListener(() => scheduleMaintenanceAlarms());
 chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === 'v10-update-check') {
     try { const result = await api('/api/updates/check'); await chrome.storage.local.set({ v10Update: result }); }
     catch (error) { console.warn('[V10] atualização:', error.message); }
+  }
+  if (alarm.name === 'v10-weekly-backup') {
+    try { await createWeeklyBackup(); console.log('[V10][service-worker→downloads] backup semanal criado'); }
+    catch (error) { console.warn('[V10] backup semanal:', error.message); }
   }
 });
 
@@ -117,7 +135,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.type === 'settings:set') { const next = { ...(await settings()), ...message.data }; await chrome.storage.local.set({ v10Settings: next }); return sendResponse({ ok: true, data: next }); }
       if (message.type === 'backend') return sendResponse({ ok: true, data: await api(message.path, message.options || {}) });
       if (message.type === 'storage:get') return sendResponse({ ok: true, data: await chrome.storage.local.get(message.keys || null) });
-      if (message.type === 'storage:set') { await chrome.storage.local.set(message.data || {}); return sendResponse({ ok: true }); }
+      if (message.type === 'storage:set') {
+        const data = message.data || {};
+        await chrome.storage.local.set(data);
+        if (data.v10ActiveDispatch) await chrome.storage.session.set({ v10ActiveDispatch: data.v10ActiveDispatch });
+        return sendResponse({ ok: true });
+      }
       if (message.type === 'backup') { const data = await chrome.storage.local.get(null); return sendResponse({ ok: true, data, createdAt: new Date().toISOString() }); }
       if (message.type === 'restore') { await chrome.storage.local.set(message.data || {}); return sendResponse({ ok: true }); }
       if (message.type === 'undo') { const d = await chrome.storage.local.get('v10Undo'); if (!d.v10Undo) return sendResponse({ ok: false, error: 'Nada para desfazer.' }); await chrome.storage.local.set(d.v10Undo.snapshot); await chrome.storage.local.remove('v10Undo'); return sendResponse({ ok: true }); }
