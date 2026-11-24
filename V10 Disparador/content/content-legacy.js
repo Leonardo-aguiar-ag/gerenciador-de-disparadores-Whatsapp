@@ -41,7 +41,7 @@ if (!window.botListenerAdded) {
     const dispatchState = {
         rodando: false, pausado: false, total: 0, enviados: 0,
         contadorLote: 0, fila: null, duplicatas: {}, optOut: {}, warmUpLimite: null,
-        ignoraDuplicatas: false, numeroConta: null
+        ignoraDuplicatas: false, numeroConta: null, runId: 0
     };
 
     function sendMsg(msg) { try { chrome.runtime.sendMessage(msg); } catch (e) {} }
@@ -149,7 +149,7 @@ if (!window.botListenerAdded) {
         if (req.acao === "iniciar_disparo") iniciarDisparo(req.fila, req.duplicatas || {}, req.optOut || {}, req.warmUpLimite, req.ignoraDuplicatas);
         else if (req.acao === "pausar") { dispatchState.pausado = !dispatchState.pausado; sendMsg({ acao: "dispatch_status", pausado: dispatchState.pausado }); }
         else if (req.acao === "pausar_auto") { dispatchState.pausado = true; sendMsg({ acao: "dispatch_status", pausado: true }); }
-        else if (req.acao === "parar") { dispatchState.rodando = false; dispatchState.pausado = false; }
+        else if (req.acao === "parar") { dispatchState.rodando = false; dispatchState.pausado = false; dispatchState.runId++; ID_DISPARO++; sendMsg({ acao: "dispatch_status", parado: true, enviados: dispatchState.enviados, total: dispatchState.total }); }
         else if (req.acao === "ping") verificarConexao();
     });
 
@@ -237,6 +237,7 @@ if (!window.botListenerAdded) {
             sendMsg({ acao: "dispatch_concluido", erro: "Lista ou scripts vazios" });
             return;
         }
+        const runId = ++dispatchState.runId;
         dispatchState.rodando = true;
         dispatchState.pausado = false;
         dispatchState.fila = fila;
@@ -250,9 +251,9 @@ if (!window.botListenerAdded) {
         console.log("[BOT] Iniciado. Total:", fila.lista.length, "| Worker:", botWorker ? "ativo ✅" : "fallback ❌");
 
         for (let i = fila.indice || 0; i < fila.lista.length; i++) {
-            if (!dispatchState.rodando) break;
-            while (dispatchState.pausado && dispatchState.rodando) await sleep(1000);
-            if (!dispatchState.rodando) break;
+            if (!dispatchState.rodando || dispatchState.runId !== runId) break;
+            while (dispatchState.pausado && dispatchState.rodando && dispatchState.runId === runId) await sleep(1000);
+            if (!dispatchState.rodando || dispatchState.runId !== runId) break;
             if (dispatchState.warmUpLimite !== null && dispatchState.warmUpLimite <= 0) {
                 dispatchState.rodando = false;
                 sendMsg({ acao: "dispatch_concluido" });
@@ -300,6 +301,7 @@ if (!window.botListenerAdded) {
             });
 
             const status = await enviarMensagem(numeroDestino, textoFinal);
+            if (!dispatchState.rodando || dispatchState.runId !== runId) return;
             dispatchState.enviados++;
             if (dispatchState.warmUpLimite !== null) dispatchState.warmUpLimite--;
 
@@ -307,7 +309,7 @@ if (!window.botListenerAdded) {
             sendMsg({ acao: "progresso_fila", indice: i + 1 });
 
             const configFila = fila.config || {};
-            if (configFila.pausaLoteAtiva && dispatchState.rodando && !dispatchState.pausado) {
+            if (configFila.pausaLoteAtiva && dispatchState.rodando && dispatchState.runId === runId && !dispatchState.pausado) {
                 dispatchState.contadorLote++;
                 if (dispatchState.contadorLote >= (Number(configFila.qtdLote) || 20)) {
                     dispatchState.contadorLote = 0;
@@ -316,13 +318,14 @@ if (!window.botListenerAdded) {
                     dispatchState.pausado = false;
                 }
             }
-            if (i < fila.lista.length - 1 && dispatchState.rodando && !dispatchState.pausado) {
+            if (i < fila.lista.length - 1 && dispatchState.rodando && dispatchState.runId === runId && !dispatchState.pausado) {
                 const minDelay = Math.max(0, Number(fila.config?.min) || 0);
                 const maxDelay = Math.max(minDelay, Number(fila.config?.max) || minDelay);
                 const delayMs = (Math.random() * (maxDelay - minDelay) + minDelay) * 1000;
                 await sleep(status === "OK" ? delayMs : 2000);
             }
         }
+        if (dispatchState.runId !== runId) return;
         dispatchState.rodando = false;
         dispatchState.pausado = false;
         sendMsg({ acao: "dispatch_concluido" });

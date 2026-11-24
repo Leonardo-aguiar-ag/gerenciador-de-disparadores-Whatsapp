@@ -3,6 +3,7 @@ import { parseScriptText } from '../shared/script-format.js';
 const $ = id => document.getElementById(id);
 let cfg = {}, allLogs = [], currentFilter = 'all';
 let runState = { total: 0, rows: [], startedAt: 0, timer: null, poll: null };
+let dispatchPaused = false;
 const call = (path, options = {}) => new Promise((resolve, reject) => chrome.runtime.sendMessage({ type: 'backend', path, options: { ...options, body: options.body == null ? undefined : JSON.stringify(options.body) } }, r => r?.ok ? resolve(r.data) : reject(new Error(r?.error || 'Backend indisponível'))));
 const msg = (text, error = false) => { $('status').textContent = ` ${text}`; $('status').style.color = error ? 'var(--bad)' : 'var(--ok)'; };
 const clock = seconds => { seconds = Math.max(0, Math.floor(seconds)); const h = String(Math.floor(seconds / 3600)).padStart(2, '0'); const m = String(Math.floor(seconds % 3600 / 60)).padStart(2, '0'); const s = String(seconds % 60).padStart(2, '0'); return `${h}:${m}:${s}`; };
@@ -13,7 +14,21 @@ function pollRun() { clearInterval(runState.poll); runState.poll = setInterval(a
 async function localDispatchLogs() { const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10DispatchLogs'] }, resolve)); return result?.data?.v10DispatchLogs || []; }
 async function saveLocalDispatchLog(message) { const logs = await localDispatchLogs(); const item = { created_at: new Date().toISOString(), level: message.status === 'ERRO' ? 'error' : 'info', event: `web.${String(message.status || 'result').toLowerCase()}`, details: { name: message.nome || '', phone: message.numero || '', status: message.status || '', message: message.mensagem || '' } }; await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:set', data: { v10DispatchLogs: [item, ...logs].slice(0, 500) } }, resolve)); return item; }
 async function refreshLocalDashboard() { allLogs = await localDispatchLogs(); const ok = allLogs.filter(x => ['ok', 'sent', 'delivered', 'read'].includes(String(x.details?.status || '').toLowerCase())).length; const errors = allLogs.filter(x => x.level === 'error' || String(x.details?.status || '').toUpperCase() === 'ERRO').length; $('mTotal').textContent = allLogs.length; $('mOk').textContent = ok; $('mErrors').textContent = errors; $('mResponded').textContent = 0; $('mTyping').textContent = 0; $('conversion').textContent = allLogs.length ? `${Math.round((ok / allLogs.length) * 100)}% de entrega` : 'Sem dados'; renderLogs(); renderChart(); }
-async function restoreActiveDispatch() { const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve)); const active = result?.data?.v10ActiveDispatch; if (!active?.active || !active.total) return; const rows = $('contacts').value.split(/\r?\n/).filter(Boolean).map(parseContactLine).filter(x => x.valid); clearInterval(runState.timer); runState = { total: active.total, rows, startedAt: Date.now(), timer: setInterval(async () => { const current = (await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve))).data?.v10ActiveDispatch || active; if (!current.active) { finishRun(current.sent || 0, current.error ? 1 : 0, current.error || 'Disparo concluído'); return; } updateRun(current.sent || 0, current.sent || 0, current.paused ? 'Fila pausada' : 'Disparo em andamento...', current.lastContact || '—'); }, 1000), poll: null }; updateRun(active.sent || 0, active.sent || 0, active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.lastContact || '—'); }
+async function restoreActiveDispatch() {
+  const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve));
+  const active = result?.data?.v10ActiveDispatch;
+  if (!active?.active || !active.total) return;
+  const rows = $('contacts').value.split(/\r?\n/).filter(Boolean).map(parseContactLine).filter(x => x.valid);
+  clearInterval(runState.timer);
+  dispatchPaused = Boolean(active.paused);
+  runState = { total: active.total, rows, startedAt: Date.now(), timer: setInterval(async () => {
+    const current = (await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve))).data?.v10ActiveDispatch || active;
+    if (!current.active) { finishRun(current.sent || 0, current.error ? 1 : 0, current.error || (current.stoppedAt ? 'Fila parada' : 'Disparo concluído')); return; }
+    dispatchPaused = Boolean(current.paused);
+    updateRun(current.sent || 0, current.sent || 0, current.paused ? 'Fila pausada' : 'Disparo em andamento...', current.lastContact || '—');
+  }, 1000), poll: null };
+  updateRun(active.sent || 0, active.sent || 0, active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.lastContact || '—');
+}
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
 function whatsappTab() { return chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }).then(tabs => { const tab = tabs[0]; if (!tab?.id) throw new Error('Abra o WhatsApp Web e mantenha a sessão conectada.'); return tab; }); }
 function sendWhatsApp(tabId, message) { return new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, response => { const error = chrome.runtime.lastError; if (error) reject(new Error(error.message)); else resolve(response); })); }
@@ -22,10 +37,18 @@ async function dispatchOnWhatsApp(rows, scripts) {
   const status = await sendWhatsApp(tab.id, { type: 'whatsapp:status' });
   if (!status?.data?.connected) throw new Error('WhatsApp Web não está conectado ou a sessão não foi reconhecida.');
   beginRun(rows);
+  dispatchPaused = false;
   await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:set', data: { v10LastDispatch: { rows, scripts, savedAt: new Date().toISOString() } } }, resolve));
   return new Promise(async (resolve, reject) => {
     const listener = (message, sender) => {
       if (sender.tab?.id !== tab.id) return;
+      if (message.acao === 'dispatch_status' && message.parado) {
+        chrome.runtime.onMessage.removeListener(listener);
+        dispatchPaused = false;
+        finishRun(Number(message.enviados || 0), 0, 'Fila parada');
+        resolve({ queued: Number(message.enviados || 0), stopped: true });
+        return;
+      }
       if (message.acao === 'log_resultado') {
         const done = Number(message.enviados || 0); const success = message.status === 'OK' ? done : Math.max(0, done - 1);
         setTimeout(() => refreshLocalDashboard().catch(() => {}), 100);
@@ -135,6 +158,8 @@ $('#importContacts').onclick = () => $('file').click();
 $('file').onchange = async e => { const file = e.target.files?.[0]; if (!file) return; $('contacts').value = await readFile(file); persistDraftSoon(); $('preview').click(); };
 $('preview').onclick = () => { const rows = $('contacts').value.split(/\r?\n/).filter(Boolean).map(parseContactLine); const valid = rows.filter(x => x.valid); const invalid = rows.length - valid.length; const examples = valid.slice(0, 3).map(x => processSpintax(interpolate(getScriptPool()[0] || '', x))).join('<br>'); $('previewBox').innerHTML = `<b>${valid.length}</b> válidos · <b>${invalid}</b> inválidos<br>${examples || 'Cadastre scripts na aba Scripts.'}`; };
 async function dispatch(text = $('contacts').value) {
+  const state = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve));
+  if (state?.data?.v10ActiveDispatch?.active) throw new Error('Já existe um disparo em andamento. Pause ou pare a fila antes de iniciar outra.');
   let rows = text.split(/\r?\n/).filter(Boolean).map(parseContactLine).filter(x => x.valid);
   if (cfg.ignoreDuplicates !== false) rows = [...new Map(rows.map(x => [x.phone, x])).values()];
   const scripts = getScriptPool();
@@ -147,9 +172,30 @@ async function dispatch(text = $('contacts').value) {
 }
 
 $('queue').onclick = async () => { try { await dispatch(); } catch (e) { $('previewBox').textContent = e.message; } };
-$('resumeDispatch').onclick = async () => { try { const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10LastDispatch', 'v10ActiveDispatch'] }, resolve)); const last = result?.data?.v10LastDispatch; const active = result?.data?.v10ActiveDispatch; if (active?.active) throw new Error('Já existe um disparo em andamento.'); if (!last?.rows?.length) throw new Error('Nenhum disparo anterior foi salvo.'); const sent = Math.min(Number(active?.sent || 0), last.rows.length); const rows = last.rows.slice(sent); if (!rows.length) throw new Error('O último disparo já foi concluído.'); $('contacts').value = rows.map(x => [x.phone, x.name, ...Object.values(x.fields || {})].filter(Boolean).join(';')).join('\n'); beginRun(rows); await dispatchOnWhatsApp(rows, last.scripts || getScriptPool()); $('previewBox').textContent = `${rows.length} contatos restantes enviados pelo WhatsApp Web.`; } catch (e) { $('previewBox').textContent = e.message; msg(e.message, true); } };
-$('pause').onclick = async () => { try { await sendWhatsAppCommand('pausar'); $('runStatus').textContent = 'Fila pausada'; msg('fila pausada'); } catch (e) { msg(e.message, true); } };
-$('stop').onclick = async () => { try { await sendWhatsAppCommand('parar'); clearInterval(runState.timer); clearInterval(runState.poll); $('runStatus').textContent = 'Fila parada'; msg('fila parada'); } catch (e) { msg(e.message, true); } };
+$('resumeDispatch').onclick = async () => {
+  try {
+    const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10LastDispatch', 'v10ActiveDispatch'] }, resolve));
+    const last = result?.data?.v10LastDispatch;
+    const active = result?.data?.v10ActiveDispatch;
+    if (active?.active && active.paused) {
+      await sendWhatsAppCommand('pausar');
+      dispatchPaused = false;
+      $('runStatus').textContent = 'Disparo em andamento...';
+      msg('fila retomada');
+      return;
+    }
+    if (active?.active) throw new Error('O disparo está em andamento; use Pausar ou Parar antes de retomá-lo.');
+    if (!last?.rows?.length) throw new Error('Nenhum disparo anterior foi salvo.');
+    const sent = Math.min(Number(active?.sent || 0), last.rows.length);
+    const rows = last.rows.slice(sent);
+    if (!rows.length) throw new Error('O último disparo já foi concluído.');
+    $('contacts').value = rows.map(x => [x.phone, x.name, ...Object.values(x.fields || {})].filter(Boolean).join(';')).join('\n');
+    await dispatchOnWhatsApp(rows, last.scripts || getScriptPool());
+    $('previewBox').textContent = `${rows.length} contatos restantes enviados pelo WhatsApp Web.`;
+  } catch (e) { $('previewBox').textContent = e.message; msg(e.message, true); }
+};
+$('pause').onclick = async () => { try { if (dispatchPaused) { msg('a fila já está pausada; use Retomar último disparo para continuar', true); return; } await sendWhatsAppCommand('pausar'); dispatchPaused = true; $('runStatus').textContent = 'Fila pausada'; msg('fila pausada'); } catch (e) { msg(e.message, true); } };
+$('stop').onclick = async () => { try { await sendWhatsAppCommand('parar'); dispatchPaused = false; $('pause').textContent = 'Ⅱ PAUSAR'; clearInterval(runState.timer); clearInterval(runState.poll); $('runStatus').textContent = 'Fila parada'; msg('fila parada'); } catch (e) { msg(e.message, true); } };
 if ($('undo')) $('undo').onclick = () => new Promise(r => chrome.runtime.sendMessage({ type: 'undo' }, r)).then(r => msg(r.ok ? 'alteração desfeita' : (r.error || 'nada para desfazer'), !r.ok));
 
 function loadProfiles() { const select = $('profileSelect'); select.innerHTML = '<option value="">(nenhum)</option>'; Object.keys(cfg.profiles || {}).forEach(name => { const o = document.createElement('option'); o.value = name; o.textContent = name; select.appendChild(o); }); }
