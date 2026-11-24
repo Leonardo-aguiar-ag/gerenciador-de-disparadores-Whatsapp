@@ -16,7 +16,7 @@ test('popup pode carregar os content scripts na aba já aberta', () => {
   assert.ok(manifest.permissions.includes('scripting'));
   assert.match(popup, /chrome\.scripting\.executeScript/);
   assert.match(popup, /content\/whatsapp-adapter\.js'[\s\S]*content\/content-legacy\.js'/);
-  assert.match(popup, /hostname !== 'web\.whatsapp\.com'/);
+  assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
 });
 
 test('sendWithRetry recupera quando o content script responde depois', async () => {
