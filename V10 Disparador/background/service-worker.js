@@ -20,7 +20,7 @@ async function api(path, options = {}) {
   const cfg = await settings();
   const headers = { 'content-type': 'application/json', ...(options.headers || {}) };
   if (cfg.backendApiKey) headers.authorization = `Bearer ${cfg.backendApiKey}`;
-  const requestOptions = { ...options, headers }; if (typeof requestOptions.body !== 'string' && requestOptions.body != null) requestOptions.body = JSON.stringify(requestOptions.body); const response = await fetch(`${cfg.backendUrl.replace(/\/$/, '')}${path}`, requestOptions);
+  const requestOptions = { ...options, headers }; if (typeof requestOptions.body !== 'string' && requestOptions.body != null) requestOptions.body = JSON.stringify(requestOptions.body); let response; try { response = await fetch(`${cfg.backendUrl.replace(/\/$/, '')}${path}`, requestOptions); } catch { throw new Error(`Backend indisponível em ${cfg.backendUrl}. Inicie o backend ou use o modo local da aba Scripts.`); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Backend ${response.status}`);
   return body;
