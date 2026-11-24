@@ -32,10 +32,11 @@ jobs:
           npm ci
           npm test
 
-      - name: Build V10 ZIP
+      - name: Build V10 ZIP with manifest at archive root
         run: |
-          zip -r V10-Disparador.zip "V10 Disparador" \
-            -x "*/.env" "*/node_modules/*" "*/dist/*"
+          cd "V10 Disparador"
+          zip -r ../V10-Disparador.zip . \
+            -x ".env" "*/.env" "node_modules/*" "*/node_modules/*" "backend/dist/*" "*/dist/*"
 
       - name: Replace V10 package in the existing release
         uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
