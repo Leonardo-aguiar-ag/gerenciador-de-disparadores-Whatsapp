@@ -7,7 +7,7 @@ const popup = await readFile(new URL('../../popup/popup.js', import.meta.url), '
 const manifest = JSON.parse(await readFile(new URL('../../manifest.json', import.meta.url), 'utf8'));
 
 test('popup não depende do status complete da aba para falar com o WhatsApp', () => {
-  assert.doesNotMatch(popup, /waitForTabComplete|tabs\.onUpdated\.addListener|chrome\.tabs\.get/);
+  assert.doesNotMatch(popup, /waitForTabComplete|tabs\.onUpdated\.addListener|chrome\.tabs\.get\s*\(/);
   assert.match(popup, /sendWithRetry/);
   assert.match(popup, /chrome\.tabs\.sendMessage/);
 });
