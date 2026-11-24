@@ -73,6 +73,10 @@ npm test
 
 Os testes cobrem o manifesto, a injeção única dos scripts, o parser de contatos/scripts, o início e os controles da fila, a persistência, o retry de mensagens e o backup.
 
+## Downloads das versões
+
+Os pacotes ZIP instaláveis de todas as versões estão disponíveis na [release Pacotes das versões V1–V10](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/tag/v10.0.0-pacotes). A release contém um arquivo separado para cada pasta, de `V1-Disparador.zip` até `V10-Disparador.zip`.
+
 ## Limitações
 
 - O WhatsApp Web pode alterar o DOM sem aviso; a V10 centraliza a detecção de sessão, mas ainda depende da interface do site.
