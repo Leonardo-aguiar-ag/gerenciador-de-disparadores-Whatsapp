@@ -91,12 +91,8 @@ function isMissingContentScript(error) {
   ].some(fragment => details.includes(fragment));
 }
 async function injectWhatsAppContentScripts(tabId) {
-  const tab = await chrome.tabs.get(tabId);
-  let hostname = '';
-  try { hostname = new URL(tab.url || '').hostname; } catch {}
-  if (hostname !== 'web.whatsapp.com') {
-    throw new Error('A injeção de contingência só é permitida em web.whatsapp.com.');
-  }
+  // tabId vem de whatsappTab(), que consulta apenas URLs do WhatsApp Web.
+  // Não usamos chrome.tabs.get: esse método não consta no suporte do Electron.
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ['content/whatsapp-adapter.js', 'content/content-legacy.js']
