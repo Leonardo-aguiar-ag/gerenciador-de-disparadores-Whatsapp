@@ -52,3 +52,17 @@ test('sendWithRetry termina com mensagem clara após esgotar as tentativas', asy
   );
   assert.equal(calls, 3);
 });
+
+test('compatibilidade Electron: service worker não exige storage.session nem alarms', async () => {
+  const worker = await readFile(new URL('../../background/service-worker.js', import.meta.url), 'utf8');
+  assert.match(worker, /chrome\.storage\.session\?\.get/);
+  assert.match(worker, /chrome\.storage\.session\?\.set/);
+  assert.match(worker, /if \(chrome\.alarms\?\.onAlarm\?\.addListener\)/);
+  assert.match(worker, /if \(!chrome\.alarms\?\.create\) return/);
+  assert.match(worker, /chrome\.downloads\?\.download/);
+});
+
+test('a busca de WhatsApp é filtrada por URL, compatível com tabs.query do Electron', () => {
+  assert.match(popup, /chrome\.tabs\.query\(\{ url: 'https:\/\/web\.whatsapp\.com\/\*' \}\)/);
+  assert.match(popup, /NO_WHATSAPP_SESSION/);
+});
