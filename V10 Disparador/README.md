@@ -26,7 +26,7 @@ O painel completo da V10 é separado do worker e mantém onboarding, tema, filtr
 
 ## Backend
 
-Requer Node.js 22.5 ou superior por usar `node:sqlite`:
+Requer Node.js 22.13 ou superior por usar `node:sqlite` sem a flag experimental:
 
 ```bash
 cd "V10 Disparador/backend"
