@@ -1,0 +1,8 @@
+# Pacotes gerados para instalação local; mantenha-os fora do repositório.
+*.zip
+
+# Dependências e artefatos locais.
+node_modules/
+dist/
+.env
+.DS_Store

@@ -74,10 +74,14 @@ async function waitForTabComplete(tabId, timeoutMs = 10000) {
 }
 async function sendMessageSafe(tabId, message) {
   await waitForTabComplete(tabId);
-  // A V10 usa somente injeção programática; os guards dos dois arquivos
-  // tornam a operação idempotente quando o popup é reaberto.
-  try { await chrome.scripting.executeScript({ target: { tabId }, files: ['content/whatsapp-adapter.js', 'content/content-legacy.js'] }); }
-  catch (error) { throw new Error(`Não foi possível preparar o WhatsApp Web: ${error.message}`); }
+  // Injeta primeiro o adaptador e depois o executor. Separar as chamadas evita
+  // que uma falha parcial deixe o executor sem a detecção de sessão, ou vice-versa.
+  // Os guards dos dois arquivos tornam a operação idempotente ao reabrir o popup.
+  try {
+    for (const file of ['content/whatsapp-adapter.js', 'content/content-legacy.js']) {
+      await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, files: [file] });
+    }
+  } catch (error) { throw new Error(`Não foi possível preparar o WhatsApp Web: ${error.message}`); }
   const backoff = [500, 1000, 2000];
   let lastError = null;
   for (let attempt = 0; attempt < backoff.length; attempt++) {
