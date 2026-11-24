@@ -145,8 +145,21 @@ if (!window.botListenerAdded) {
     }
 
     /* LISTENER */
-    chrome.runtime.onMessage.addListener((req) => {
-        if (req.acao === "iniciar_disparo") iniciarDisparo(req.fila, req.duplicatas || {}, req.optOut || {}, req.warmUpLimite, req.ignoraDuplicatas);
+    chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
+        if (req.acao === "iniciar_disparo") {
+            const fila = req.fila;
+            if (dispatchState.rodando) {
+                sendResponse({ accepted: false, error: "Já existe um disparo em andamento nesta aba." });
+                return true;
+            }
+            if (!fila || !Array.isArray(fila.lista) || !fila.lista.length || !Array.isArray(fila.scripts) || !fila.scripts.filter(s => String(s || '').trim()).length) {
+                sendResponse({ accepted: false, error: "Lista ou scripts vazios." });
+                return true;
+            }
+            iniciarDisparo(fila, req.duplicatas || {}, req.optOut || {}, req.warmUpLimite, req.ignoraDuplicatas);
+            sendResponse({ accepted: dispatchState.rodando });
+            return true;
+        }
         else if (req.acao === "pausar") { dispatchState.pausado = !dispatchState.pausado; sendMsg({ acao: "dispatch_status", pausado: dispatchState.pausado }); }
         else if (req.acao === "pausar_auto") { dispatchState.pausado = true; sendMsg({ acao: "dispatch_status", pausado: true }); }
         else if (req.acao === "parar") { dispatchState.rodando = false; dispatchState.pausado = false; dispatchState.runId++; ID_DISPARO++; sendMsg({ acao: "dispatch_status", parado: true, enviados: dispatchState.enviados, total: dispatchState.total }); }

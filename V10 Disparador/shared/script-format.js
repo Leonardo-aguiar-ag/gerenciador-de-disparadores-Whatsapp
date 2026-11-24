@@ -17,3 +17,24 @@ export function parseScriptText(text) {
     .map(script => script.trim())
     .filter(Boolean);
 }
+
+export function parseScriptImport(fileName, text) {
+  if (!/\.json$/i.test(String(fileName ?? ''))) return parseScriptText(text);
+
+  let data;
+  try {
+    data = JSON.parse(String(text ?? ''));
+  } catch {
+    throw new Error('JSON inválido. Verifique o arquivo e tente novamente.');
+  }
+
+  const items = Array.isArray(data) ? data : (data?.scripts ?? data?.content);
+  if (!Array.isArray(items)) {
+    throw new Error('O JSON deve ser uma lista de scripts ou conter "scripts"/"content".');
+  }
+
+  return items
+    .map(item => typeof item === 'string' ? item : (item?.texto ?? item?.text ?? ''))
+    .map(script => String(script).trim())
+    .filter(Boolean);
+}

@@ -1,5 +1,5 @@
 import { parseContactLine, interpolate, processSpintax } from '../shared/phone.js';
-import { parseScriptText } from '../shared/script-format.js';
+import { parseScriptImport } from '../shared/script-format.js';
 const $ = id => document.getElementById(id);
 let cfg = {}, allLogs = [], currentFilter = 'all';
 let runState = { total: 0, rows: [], startedAt: 0, timer: null, poll: null };
@@ -31,7 +31,15 @@ async function restoreActiveDispatch() {
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
 function whatsappTab() { return chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }).then(tabs => { const tab = tabs[0]; if (!tab?.id) throw new Error('Abra o WhatsApp Web e mantenha a sessão conectada.'); return tab; }); }
-function sendWhatsApp(tabId, message) { return new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, response => { const error = chrome.runtime.lastError; if (error) reject(new Error(error.message)); else resolve(response); })); }
+function sendWhatsAppOnce(tabId, message) { return new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, response => { const error = chrome.runtime.lastError; if (error) reject(new Error(error.message)); else resolve(response); })); }
+async function sendWhatsApp(tabId, message) {
+  try { return await sendWhatsAppOnce(tabId, message); }
+  catch (error) {
+    if (!/receiving end|could not establish connection/i.test(error.message)) throw error;
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['content/content-legacy.js', 'content/whatsapp-adapter.js'] });
+    return sendWhatsAppOnce(tabId, message);
+  }
+}
 async function dispatchOnWhatsApp(rows, scripts) {
   const tab = await whatsappTab();
   const status = await sendWhatsApp(tab.id, { type: 'whatsapp:status' });
@@ -63,8 +71,9 @@ async function dispatchOnWhatsApp(rows, scripts) {
     chrome.runtime.onMessage.addListener(listener);
     try {
       const config = { min: Number(cfg.minDelay ?? 15), max: Number(cfg.maxDelay ?? 30), pausaLoteAtiva: Number(cfg.pauseEvery) > 0, qtdLote: Number(cfg.pauseEvery) || 20, tempoLoteMin: Number(cfg.pauseMinutes) || 5 };
-      await sendWhatsApp(tab.id, { acao: 'iniciar_disparo', fila: { lista: rows.map(x => ({ num: x.phone, nome: x.name, campos: x.fields || {} })), scripts, config }, ignoraDuplicatas: cfg.ignoreDuplicates !== false });
-    } catch (error) { chrome.runtime.onMessage.removeListener(listener); clearInterval(runState.timer); reject(error); }
+      const accepted = await sendWhatsApp(tab.id, { acao: 'iniciar_disparo', fila: { lista: rows.map(x => ({ num: x.phone, nome: x.name, campos: x.fields || {} })), scripts, config }, ignoraDuplicatas: cfg.ignoreDuplicates !== false });
+      if (!accepted?.accepted) throw new Error(accepted?.error || 'O WhatsApp Web não confirmou o início do disparo. Recarregue a aba e tente novamente.');
+    } catch (error) { chrome.runtime.onMessage.removeListener(listener); finishRun(0, rows.length, error.message); reject(error); }
   });
 }
 async function sendWhatsAppCommand(action) { const tab = await whatsappTab(); await sendWhatsApp(tab.id, { acao: action }); }
@@ -125,32 +134,41 @@ function scriptIdFor(name) { return name.toLowerCase().trim().replace(/[^a-z0-9�
 function renderSavedScripts(items = []) { const select = $('savedScripts'); select.innerHTML = '<option value="">-- Scripts em Edição --</option>'; items.forEach(x => { const o = document.createElement('option'); o.value = x.id; o.textContent = `${x.name} · versão ${x.version}`; o.dataset.name = x.name || ''; o.dataset.content = JSON.stringify(x.content || []); o.dataset.local = x.local ? 'true' : 'false'; select.appendChild(o); }); const history = items.slice(0, 20); $('scriptsList').innerHTML = `<h2>Histórico de versões</h2>${history.length ? history.map(x => `<div class="list-card"><b>${x.name}</b><div class="muted">Versão ${x.version} · ${(x.content || []).length} variação(ões)${x.local ? ' · salva neste dispositivo' : ''}</div></div>`).join('') : '<p class="muted">Nenhuma versão carregada.</p>'}`; }
 async function loadSavedScripts() { const localItems = Array.isArray(cfg.scriptVersions) ? cfg.scriptVersions : []; let items = localItems; try { const d = await call('/api/scripts'); const remoteItems = d.data || []; const remoteIds = new Set(remoteItems.map(x => x.id)); items = [...remoteItems, ...localItems.filter(x => x.local && !remoteIds.has(x.id))]; cfg.scriptVersions = items; await saveSettings(true); } catch { /* backend opcional: as versões locais continuam disponíveis */ } renderSavedScripts(items); }
 $('savedScripts').onchange = e => { const o = e.target.selectedOptions[0]; if (!o?.dataset.content) return; renderScriptFields(JSON.parse(o.dataset.content)); $('scriptName').value = o.dataset.name || ''; };
-$('saveScripts').onclick = async () => { try { const name = $('scriptName').value.trim() || 'Scripts V10'; const content = getScriptPool(); if (!content.length) return alert('Preencha pelo menos uma variação.'); const scriptId = scriptIdFor(name); const localVersion = { id: `local-${Date.now()}`, scriptId, version: (cfg.scriptVersions || []).filter(x => x.scriptId === scriptId).length + 1, name, content, createdAt: new Date().toISOString(), local: true }; let saved = localVersion; let localOnly = true; try { saved = await call('/api/scripts', { method: 'POST', body: { scriptId, name, content } }); localOnly = false; } catch {} cfg.scriptPool = content; cfg.scriptVersions = [saved, ...(cfg.scriptVersions || []).filter(x => x.id !== saved.id)]; await saveSettings(true); renderSavedScripts(cfg.scriptVersions); msg(localOnly ? 'scripts salvos neste dispositivo; backend indisponível' : 'scripts salvos'); } catch (e) { msg(e.message, true); } };
+async function saveScriptVersion(name, content) {
+  const scriptId = scriptIdFor(name);
+  const localVersion = { id: `local-${Date.now()}`, scriptId, version: (cfg.scriptVersions || []).filter(x => x.scriptId === scriptId).length + 1, name, content, createdAt: new Date().toISOString(), local: true };
+  let saved = localVersion;
+  let localOnly = true;
+  try { saved = await call('/api/scripts', { method: 'POST', body: { scriptId, name, content } }); localOnly = false; } catch {}
+  cfg.scriptPool = content;
+  cfg.scriptName = name;
+  cfg.scriptVersions = [saved, ...(cfg.scriptVersions || []).filter(x => x.id !== saved.id)];
+  await saveSettings(true);
+  renderSavedScripts(cfg.scriptVersions);
+  $('savedScripts').value = saved.id;
+  return { saved, localOnly };
+}
+$('saveScripts').onclick = async () => { try { const name = $('scriptName').value.trim() || 'Scripts V10'; const content = getScriptPool(); if (!content.length) return alert('Preencha pelo menos uma variação.'); const { localOnly } = await saveScriptVersion(name, content); msg(localOnly ? 'scripts salvos neste dispositivo; backend indisponível' : 'scripts salvos'); } catch (e) { msg(e.message, true); } };
 $('clearScripts').onclick = () => { if (confirm('Limpar as 20 variações?')) renderScriptFields(); };
 $('deleteScripts').onclick = async () => { const select = $('savedScripts'); const id = select.value; if (!id) return msg('Selecione uma versão salva para excluir', true); if (!confirm('Excluir a versão selecionada?')) return; try { const option = select.selectedOptions[0]; if (option?.dataset.local !== 'true') { try { await call(`/api/scripts/${encodeURIComponent(id)}`, { method: 'DELETE' }); } catch (e) { return msg(e.message, true); } } cfg.scriptVersions = (cfg.scriptVersions || []).filter(x => x.id !== id); await saveSettings(true); renderSavedScripts(cfg.scriptVersions); renderScriptFields(); $('scriptName').value = ''; msg('versão excluída'); } catch (e) { msg(e.message, true); } };
 $('exportScripts').onclick = () => { const data = JSON.stringify({ name: $('scriptName').value, scripts: getScriptPool() }, null, 2); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = `${$('scriptName').value || 'scripts-v10'}.json`; a.click(); };
 $('importScripts').onclick = () => $('scriptsFile').click();
 $('scriptsFile').onchange = async e => {
+  const input = e.target;
   const file = e.target.files?.[0];
   if (!file) return;
-
-  const text = await file.text();
-  let scripts;
-  const importedName = file.name.replace(/\.[^.]+$/, '').trim() || 'Scripts V10';
-
+  input.value = '';
   try {
-    const data = JSON.parse(text);
-    scripts = data.scripts || data.content || [];
-  } catch {
-    // TXT: cada bloco entre linhas "---" ocupa um único campo da aba Scripts.
-    scripts = parseScriptText(text);
-  }
-
-  if (!Array.isArray(scripts)) scripts = [];
-  $('scriptName').value = importedName;
-  renderScriptFields(scripts);
-  persistDraftSoon();
-  msg(`${scripts.length} variação(ões) importada(s) para edição`);
+    const scripts = parseScriptImport(file.name, await file.text());
+    if (!scripts.length) throw new Error('O arquivo não contém scripts válidos.');
+    const importedName = file.name.replace(/\.[^.]+$/, '').trim() || 'Scripts V10';
+    const imported = scripts.slice(0, 20);
+    $('scriptName').value = importedName;
+    renderScriptFields(imported);
+    const { localOnly } = await saveScriptVersion(importedName, imported);
+    const extra = scripts.length > imported.length ? ` · ${scripts.length - imported.length} excedente(s) ignorado(s); limite de 20` : '';
+    msg(`${imported.length} variação(ões) importada(s) e salvas${localOnly ? ' neste dispositivo' : ''}${extra}`);
+  } catch (error) { msg(error.message, true); }
 };
 
 async function readFile(file) { const buf = await file.arrayBuffer(); if (window.XLSX && /xlsx|xls/.test(file.name)) { const wb = XLSX.read(buf, { type: 'array' }); return XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], { FS: ';' }); } return new TextDecoder().decode(buf); }
