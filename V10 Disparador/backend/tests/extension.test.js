@@ -22,11 +22,11 @@ test('content scripts são declarados uma única vez e na ordem correta', () => 
   assert.ok(!manifest.permissions.includes('scripting'), 'não deve manter permissão de injeção programática');
   for (const relativePath of contentScripts) {
     const file = path.join(root, relativePath);
-    assert.ok(fs.existsSync(file), `arquivo declarado não encontrado: \${relativePath}`);
+    assert.ok(fs.existsSync(file), `arquivo declarado não encontrado: ${relativePath}`);
     const source = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(source, /^\s*(?:import|export)\s/m, `\${relativePath} usa sintaxe de módulo, incompatível com content_scripts clássicos`);
+    assert.doesNotMatch(source, /^\s*(?:import|export)\s/m, `${relativePath} usa sintaxe de módulo, incompatível com content_scripts clássicos`);
     const check = spawnSync(process.execPath, ['--check', file], { encoding: 'utf8' });
-    assert.equal(check.status, 0, `\${relativePath} tem erro de sintaxe: \${check.stderr}`);
+    assert.equal(check.status, 0, `${relativePath} tem erro de sintaxe: ${check.stderr}`);
   }
 });
 
@@ -38,7 +38,7 @@ test('popup referencia somente IDs existentes e não reinjeta content scripts', 
   const optionalIds = new Set(['undo']);
   const missing = [...new Set(references)].filter(id => !ids.has(id) && !optionalIds.has(id));
 
-  assert.deepEqual(missing, [], `IDs do popup não encontrados no HTML: \${missing.join(', ')}`);
+  assert.deepEqual(missing, [], `IDs do popup não encontrados no HTML: ${missing.join(', ')}`);
   assert.doesNotMatch(popup, /\$\(['"]#/);
   assert.doesNotMatch(popup, /chrome\.scripting\.executeScript/);
   assert.match(popup, /Content script do WhatsApp Web não respondeu/);
