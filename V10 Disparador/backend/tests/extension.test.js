@@ -41,7 +41,7 @@ test('popup referencia somente IDs existentes e não reinjeta content scripts', 
   assert.deepEqual(missing, [], `IDs do popup não encontrados no HTML: ${missing.join(', ')}`);
   assert.doesNotMatch(popup, /\$\(['"]#/);
   assert.doesNotMatch(popup, /chrome\.scripting\.executeScript/);
-  assert.match(popup, /Content script do WhatsApp Web não respondeu/);
+  assert.match(popup, /Não foi possível comunicar com a extensão dentro do WhatsApp Web/);
 });
 
 test('importação de scripts aceita TXT por blocos e JSON compatível com a V9/V10', () => {
@@ -79,8 +79,8 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   const popup = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
   assert.match(popup, /function sendMessageSafe/);
   assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
-  assert.match(popup, /chrome\.tabs\.onUpdated/);
-  assert.match(popup, /const backoff = \[300, 800, 1500\]/);
+  assert.doesNotMatch(popup, /chrome\.tabs\.onUpdated|waitForTabComplete/);
+  assert.match(popup, /delays: \[0, 300, 650, 1000, 1500, 2000, 2500\]/);
   assert.match(popup, /Content script do WhatsApp Web não respondeu/);
   assert.match(popup, /Falha na conexão: \$\{error\.message\}/);
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
