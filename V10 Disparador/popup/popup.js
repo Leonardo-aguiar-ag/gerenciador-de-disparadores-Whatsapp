@@ -1,4 +1,5 @@
 import { parseContactLine, interpolate, processSpintax } from '../shared/phone.js';
+import { parseScriptText } from '../shared/script-format.js';
 const $ = id => document.getElementById(id);
 let cfg = {}, allLogs = [], currentFilter = 'all';
 let runState = { total: 0, rows: [], startedAt: 0, timer: null, poll: null };
@@ -62,7 +63,28 @@ $('clearScripts').onclick = () => { if (confirm('Limpar as 20 variações?')) re
 $('deleteScripts').onclick = () => { if (confirm('Limpar a versão selecionada da edição atual?')) { renderScriptFields(); $('scriptName').value = ''; } };
 $('exportScripts').onclick = () => { const data = JSON.stringify({ name: $('scriptName').value, scripts: getScriptPool() }, null, 2); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' })); a.download = `${$('scriptName').value || 'scripts-v10'}.json`; a.click(); };
 $('importScripts').onclick = () => $('scriptsFile').click();
-$('scriptsFile').onchange = async e => { const file = e.target.files?.[0]; if (!file) return; const text = await file.text(); try { const data = JSON.parse(text); $('scriptName').value = data.name || ''; renderScriptFields(data.scripts || data.content || []); } catch { renderScriptFields(text.split(/\r?\n/)); } msg('scripts importados para edição'); };
+$('scriptsFile').onchange = async e => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const text = await file.text();
+  let scripts;
+  let importedName = '';
+
+  try {
+    const data = JSON.parse(text);
+    importedName = data.name || '';
+    scripts = data.scripts || data.content || [];
+  } catch {
+    // TXT: cada bloco entre linhas "---" ocupa um único campo da aba Scripts.
+    scripts = parseScriptText(text);
+  }
+
+  if (!Array.isArray(scripts)) scripts = [];
+  $('scriptName').value = importedName;
+  renderScriptFields(scripts);
+  msg(`${scripts.length} variação(ões) importada(s) para edição`);
+};
 
 async function readFile(file) { const buf = await file.arrayBuffer(); if (window.XLSX && /xlsx|xls/.test(file.name)) { const wb = XLSX.read(buf, { type: 'array' }); return XLSX.utils.sheet_to_csv(wb.Sheets[wb.SheetNames[0]], { FS: ';' }); } return new TextDecoder().decode(buf); }
 $('file').onchange = async e => { const file = e.target.files?.[0]; if (!file) return; $('contacts').value = await readFile(file); $('preview').click(); };
