@@ -92,7 +92,7 @@ function isMissingContentScript(error) {
 }
 async function injectWhatsAppContentScripts(tabId) {
   // tabId vem de whatsappTab(), que consulta apenas URLs do WhatsApp Web.
-  // Não usamos chrome.tabs.get: esse método não consta no suporte do Electron.
+  // Evitamos consultar o objeto da aba por ID, recurso ausente no suporte do Electron.
   await chrome.scripting.executeScript({
     target: { tabId },
     files: ['content/whatsapp-adapter.js', 'content/content-legacy.js']
