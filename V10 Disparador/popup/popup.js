@@ -80,24 +80,6 @@ async function whatsappTab() {
   return tab;
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-function isMissingContentScript(error) {
-  const details = String(error?.message || error || '').toLowerCase();
-  return [
-    'receiving end does not exist',
-    'could not establish connection',
-    'no response from the content script',
-    'a mensagem não recebeu resposta',
-    'message port closed'
-  ].some(fragment => details.includes(fragment));
-}
-async function injectWhatsAppContentScripts(tabId) {
-  // tabId vem de whatsappTab(), que consulta apenas URLs do WhatsApp Web.
-  // Evitamos consultar o objeto da aba por ID, recurso ausente no suporte do Electron.
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    files: ['content/whatsapp-adapter.js', 'content/content-legacy.js']
-  });
-}
 async function sendMessageSafe(tabId, message) {
   const action = message.acao || message.type;
   return sendWithRetry(
@@ -108,20 +90,7 @@ async function sendMessageSafe(tabId, message) {
     })),
     {
       delays: [0, 300, 650, 1000, 1500, 2000, 2500],
-      errorMessage: 'Não foi possível comunicar com a extensão dentro do WhatsApp Web. Confirme que a aba está aberta e atualize-a com F5.',
-      onFailure: async (error, attempt) => {
-        if (!isMissingContentScript(error)) return;
-        try {
-          await injectWhatsAppContentScripts(tabId);
-          console.info('[V10][popup] scripts do WhatsApp preparados sob demanda', { acao: action, tentativa: attempt });
-        } catch (injectionError) {
-          console.warn('[V10][popup] injeção de contingência ainda não disponível', {
-            acao: action,
-            tentativa: attempt,
-            erro: injectionError?.message || String(injectionError)
-          });
-        }
-      },
+      errorMessage: 'Não foi possível comunicar com a extensão dentro do WhatsApp Web. Confirme que a sessão do perfil está aberta no Painel MultiSessão e recarregue a sessão se necessário.',
       onRetry: ({ attempt, error }) => console.warn('[V10][popup] aguardando resposta do WhatsApp', {
         acao: action,
         tentativa: attempt,
