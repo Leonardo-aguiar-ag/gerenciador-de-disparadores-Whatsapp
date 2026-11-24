@@ -17,7 +17,13 @@ async function refreshLocalDashboard() { const result = await new Promise(resolv
 async function restoreActiveDispatch() {
   const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch', 'v10LastDispatch'] }, resolve));
   let active = result?.data?.v10ActiveDispatch;
-  if (!active?.active) return;
+  const last = result?.data?.v10LastDispatch;
+  if (!active?.active) {
+    if (!last?.rows?.length) return;
+    runState = { total: last.rows.length, rows: last.rows, startedAt: Date.parse(last.savedAt || '') || 0, timer: null, poll: null };
+    updateRun(Number(active?.sent || 0), Number(active?.sent || 0), active?.error || (active?.stoppedAt ? 'Último disparo parado' : 'Último disparo concluído'), active?.lastContact || 'Concluído');
+    return;
+  }
   if (!active.total) {
     active = { ...active, active: false, paused: false, stoppedAt: new Date().toISOString() };
     await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:set', data: { v10ActiveDispatch: active } }, resolve));
@@ -25,21 +31,18 @@ async function restoreActiveDispatch() {
   }
   let liveDispatch = null;
   try { const tab = await whatsappTab(); liveDispatch = (await sendWhatsApp(tab.id, { type: 'whatsapp:status' }))?.data?.dispatch || null; } catch {}
-  const recentStart = Number(active.startedAt) > 0 && Date.now() - Number(active.startedAt) < 30000;
-  if ((!liveDispatch || !liveDispatch.active) && !recentStart) {
-    active = { ...active, active: false, paused: false, stoppedAt: new Date().toISOString(), error: active.error || 'Execução anterior encerrada ou aba recarregada.' };
-    await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:set', data: { v10ActiveDispatch: active } }, resolve));
-    return;
-  }
+  // O popup é descartável. A ausência de um snapshot vivo não autoriza apagar
+  // a fila persistida: a aba pode estar entre duas mensagens ou o content script
+  // pode ter sido reinicializado. O usuário ainda pode retomar a fila salva.
   if (liveDispatch?.active) active = { ...active, sent: liveDispatch.sent, total: liveDispatch.total || active.total, paused: liveDispatch.paused, waitingForBusinessHours: liveDispatch.waitingForBusinessHours };
-  const rows = Array.isArray(result?.data?.v10LastDispatch?.rows) ? result.data.v10LastDispatch.rows : parseContactList($('contacts').value).filter(x => x.valid);
+  const rows = Array.isArray(last?.rows) ? last.rows : parseContactList($('contacts').value).filter(x => x.valid);
   clearInterval(runState.timer);
   dispatchPaused = Boolean(active.paused);
   runState = { total: active.total, rows, startedAt: Date.now(), timer: setInterval(async () => {
     const current = (await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve))).data?.v10ActiveDispatch || active;
     if (!current.active) { finishRun(current.sent || 0, current.error ? 1 : 0, current.error || (current.stoppedAt ? 'Fila parada' : 'Disparo concluído'), current.sent || 0); return; }
     dispatchPaused = Boolean(current.paused);
-    updateRun(current.sent || 0, current.sent || 0, current.paused ? 'Fila pausada' : 'Disparo em andamento...', current.lastContact || '—');
+    updateRun(current.sent || 0, current.sent || 0, current.waitingForBusinessHours ? 'Aguardando horário comercial...' : current.paused ? 'Fila pausada' : liveDispatch?.active ? 'Disparo em andamento...' : 'Fila persistida; monitorando a aba...', current.lastContact || '—');
   }, 1000), poll: null };
   updateRun(active.sent || 0, active.sent || 0, active.waitingForBusinessHours ? 'Aguardando horário comercial...' : active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.lastContact || '—');
 }
@@ -251,6 +254,11 @@ async function dispatch(text = $('contacts').value, scriptOverride = null) {
     warmUpLimite = Math.max(0, cap - sentToday);
     if (!warmUpLimite) throw new Error(`Limite de warm-up de ${cap} mensagens atingido hoje.`);
   }
+  // O popup pode ser fechado imediatamente após o clique; salve o rascunho
+  // antes de entregar a execução à aba do WhatsApp e ao service worker.
+  cfg.contacts = text;
+  cfg.scriptPool = scripts;
+  await saveSettings(true);
   const result = await dispatchOnWhatsApp(rows, scripts, warmUpLimite);
   if (result.stopped) { $('previewBox').textContent = `Disparo parado após ${result.queued} contato(s) processado(s).`; return result; }
   const progress = result.total ? Math.round(result.queued / result.total * 100) : 100;

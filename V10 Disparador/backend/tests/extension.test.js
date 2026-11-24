@@ -56,6 +56,7 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   const content = fs.readFileSync(path.join(root, 'content/content-legacy.js'), 'utf8');
   const adapter = fs.readFileSync(path.join(root, 'content/whatsapp-adapter.js'), 'utf8');
   const worker = fs.readFileSync(path.join(root, 'background/service-worker.js'), 'utf8');
+  const popup = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
   assert.match(content, /conversation-panel-wrapper/);
   assert.match(content, /function elementoVisivel/);
@@ -67,4 +68,8 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(content, /dispatch_concluido", limiteAtingido: true, enviados: dispatchState\.enviados/);
   assert.match(worker, /active:\s*message\.parado\s*\?\s*false\s*:\s*Boolean\(active\.active\)/);
   assert.match(worker, /active: Boolean\(active\.active\)/, 'resultados tardios não devem reativar uma fila parada');
+  assert.match(worker, /heartbeatAt/);
+  assert.match(popup, /A ausência de um snapshot vivo não autoriza apagar/);
+  assert.match(popup, /Fila persistida; monitorando a aba/);
+  assert.match(popup, /Último disparo concluído/);
 });
