@@ -12,10 +12,11 @@ test('popup não depende do status complete da aba para falar com o WhatsApp', (
   assert.match(popup, /chrome\.tabs\.sendMessage/);
 });
 
-test('popup pode carregar os content scripts na aba já aberta', () => {
-  assert.ok(manifest.permissions.includes('scripting'));
-  assert.match(popup, /chrome\.scripting\.executeScript/);
-  assert.match(popup, /content\/whatsapp-adapter\.js'[\s\S]*content\/content-legacy\.js'/);
+test('popup mantém os content scripts declarativos para as sessões Electron', () => {
+  assert.ok(!manifest.permissions.includes('scripting'));
+  assert.doesNotMatch(popup, /chrome\.scripting\.executeScript/);
+  assert.ok(manifest.content_scripts.some(script => script.js?.includes('content/whatsapp-adapter.js') && script.js?.includes('content/content-legacy.js')));
+  assert.match(popup, /chrome\.tabs\.query\(\{ url: 'https:\/\/web\.whatsapp\.com\/\*' \}\)/);
   assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
 });
 
