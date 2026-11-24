@@ -61,3 +61,8 @@ A interface segue a identidade visual da V9: tema escuro/azul, cartões compacto
 Na aba **Scripts**, existem 20 campos `Variação 1` a `Variação 20`. Preencha as mensagens, salve a versão e inicie o disparo pela aba **Disparos**. A fila embaralha as variações e usa cada uma no máximo uma vez por ciclo; quando todas as opções preenchidas forem usadas, um novo ciclo é embaralhado. Assim, com 20 variações e contatos suficientes, não há repetição até completar as 20 opções.
 
 Os scripts podem ser salvos em versões, importados em JSON/TXT, exportados e limpos. No TXT, cada variação deve ficar em um bloco separado por uma linha contendo apenas `---`; quebras de linha dentro do bloco são preservadas. Por exemplo: `mensagem 1\n---\nmensagem 2`. A aba **Disparos** aceita CSV/TXT colado, faz prévia, valida telefones e remove duplicatas quando essa opção está ativa. **Configurações** concentra perfis, conta, delays de 15–30 segundos, pausa por lote, horário comercial, duplicatas, warm-up, atualização, backup e verificação de conexão.
+
+
+## Pacote da release
+
+Ao publicar alterações na pasta `V10 Disparador` na branch `main`, o workflow `.github/workflows/package-v10-release.yml` executa a suíte de testes, gera `V10-Disparador.zip`, substitui esse arquivo na release `v10.0.0-pacotes` e guarda uma cópia como artefato do workflow. Arquivos locais `.env`, dependências `node_modules` e build `dist` não entram no pacote.

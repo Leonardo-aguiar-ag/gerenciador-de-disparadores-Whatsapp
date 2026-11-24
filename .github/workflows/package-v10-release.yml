@@ -1,0 +1,56 @@
+name: Package V10 and update release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "V10 Disparador/**"
+      - ".github/workflows/package-v10-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.5"
+          cache: npm
+          cache-dependency-path: "V10 Disparador/backend/package-lock.json"
+
+      - name: Install backend dependencies and run tests
+        working-directory: "V10 Disparador/backend"
+        run: |
+          npm ci
+          npm test
+
+      - name: Build V10 ZIP
+        run: |
+          zip -r V10-Disparador.zip "V10 Disparador" \
+            -x "*/.env" "*/node_modules/*" "*/dist/*"
+
+      - name: Replace V10 package in the existing release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f # v3.0.4
+        with:
+          tag_name: v10.0.0-pacotes
+          files: V10-Disparador.zip
+          overwrite_files: true
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save ZIP as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: V10-Disparador-corrigido
+          path: V10-Disparador.zip
+          if-no-files-found: error
+          retention-days: 14
