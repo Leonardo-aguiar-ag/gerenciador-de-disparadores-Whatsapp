@@ -49,11 +49,19 @@ if (!window.botListenerAdded) {
 
     /* CONEXÃO */
     let ultimoEstadoConectado = null;
+    function elementoVisivel(element) {
+        if (!element) return false;
+        const style = window.getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || 1) > 0 && element.getClientRects().length > 0;
+    }
+    function primeiroVisivel(selectors) {
+        return [...document.querySelectorAll(selectors)].find(elementoVisivel) || null;
+    }
     function verificarConexao() {
         try {
-            const painel = document.querySelector('#pane-side, div[data-testid="chat-list"]');
-            const qr = document.querySelector('[data-testid="qrcode"], [data-testid="qr-code"], [aria-label*="QR code" i]');
-            const input = document.querySelector('footer div[contenteditable="true"]');
+            const painel = primeiroVisivel('#pane-side, [data-testid="conversation-panel-wrapper"], [data-testid="chat-list"], [data-testid="chat-list-search"]');
+            const qr = primeiroVisivel('[data-testid="qrcode"], [data-testid="qr-code"], [aria-label*="QR code" i], [aria-label*="código QR" i]');
+            const input = primeiroVisivel('footer div[contenteditable="true"], div[contenteditable="true"][role="textbox"]');
             let conectado = false, numero = "Número Oculto", nome = "Conta Autenticada";
             if ((painel || input) && !qr) {
                 conectado = true;

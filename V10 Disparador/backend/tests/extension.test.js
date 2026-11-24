@@ -54,8 +54,14 @@ test('parser mantém compatibilidade com linhas simples separadas por ponto e v�
 
 test('início do disparo exige conexão e pausa sem execução não ativa estado fantasma', () => {
   const content = fs.readFileSync(path.join(root, 'content/content-legacy.js'), 'utf8');
+  const adapter = fs.readFileSync(path.join(root, 'content/whatsapp-adapter.js'), 'utf8');
   const worker = fs.readFileSync(path.join(root, 'background/service-worker.js'), 'utf8');
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
+  assert.match(content, /conversation-panel-wrapper/);
+  assert.match(content, /function elementoVisivel/);
+  assert.match(adapter, /function isVisible/);
+  assert.match(adapter, /chat-list-search/);
+  assert.doesNotMatch(content, /document\.querySelector\([^\n]*canvas/);
   assert.match(content, /if \(!dispatchState\.rodando\).*Não existe disparo ativo para pausar/);
   assert.match(content, /dispatchState\.warmUpLimite = warmUpLimite == null \? null/);
   assert.match(content, /dispatch_concluido", limiteAtingido: true, enviados: dispatchState\.enviados/);
