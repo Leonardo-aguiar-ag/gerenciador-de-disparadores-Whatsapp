@@ -33,23 +33,36 @@ async function api(path, options = {}) {
 async function readDispatch() {
   const stored = await chrome.storage.local.get('v10ActiveDispatch');
   if (stored.v10ActiveDispatch) return stored.v10ActiveDispatch;
-  const session = await chrome.storage.session.get('v10ActiveDispatch');
-  return session.v10ActiveDispatch || {};
+  // Electron exposes only a subset of chrome.storage; session is not guaranteed.
+  if (!chrome.storage.session?.get) return {};
+  try {
+    const session = await chrome.storage.session.get('v10ActiveDispatch');
+    return session.v10ActiveDispatch || {};
+  } catch (error) {
+    console.warn('[V10] storage.session indisponível; usando storage.local:', error.message);
+    return {};
+  }
 }
 
 async function saveDispatch(patch) {
   const current = await readDispatch();
   const snapshot = { ...current, ...patch, heartbeatAt: new Date().toISOString() };
   await chrome.storage.local.set({ v10ActiveDispatch: snapshot });
-  await chrome.storage.session.set({ v10ActiveDispatch: snapshot });
+  if (chrome.storage.session?.set) {
+    try { await chrome.storage.session.set({ v10ActiveDispatch: snapshot }); }
+    catch (error) { console.warn('[V10] storage.session indisponível; estado mantido em storage.local:', error.message); }
+  }
 }
 
 async function scheduleMaintenanceAlarms() {
+  // chrome.alarms is not part of Electron's documented supported extension APIs.
+  if (!chrome.alarms?.create) return;
   chrome.alarms.create('v10-update-check', { periodInMinutes: 1440 });
   chrome.alarms.create('v10-weekly-backup', { periodInMinutes: 10080, delayInMinutes: 5 });
 }
 
 async function createWeeklyBackup() {
+  if (!chrome.downloads?.download) throw new Error('Backup automático por downloads não está disponível neste ambiente.');
   const data = await chrome.storage.local.get(null);
   const date = new Date().toISOString().slice(0, 10);
   const payload = encodeURIComponent(JSON.stringify({ format: 'v10-backup-v1', createdAt: new Date().toISOString(), extension: data }, null, 2));
@@ -62,7 +75,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   await scheduleMaintenanceAlarms();
 });
 chrome.runtime.onStartup.addListener(() => scheduleMaintenanceAlarms());
-chrome.alarms.onAlarm.addListener(async alarm => {
+if (chrome.alarms?.onAlarm?.addListener) chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === 'v10-update-check') {
     try { const result = await api('/api/updates/check'); await chrome.storage.local.set({ v10Update: result }); }
     catch (error) { console.warn('[V10] atualização:', error.message); }
