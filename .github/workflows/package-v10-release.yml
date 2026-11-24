@@ -38,7 +38,7 @@ jobs:
             -x "*/.env" "*/node_modules/*" "*/dist/*"
 
       - name: Replace V10 package in the existing release
-        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f # v3.0.4
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: v10.0.0-pacotes
           files: V10-Disparador.zip
