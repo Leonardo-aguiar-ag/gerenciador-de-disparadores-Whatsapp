@@ -1,4 +1,5 @@
 import { parseContactLine, parseContactList, normalizePhone, interpolate, processSpintax } from '../shared/phone.js';
+import { sendWithRetry } from '../shared/message-retry.js';
 import { parseScriptImport } from '../shared/script-format.js';
 const $ = id => document.getElementById(id);
 let cfg = {}, allLogs = [], currentFilter = 'all';
@@ -60,37 +61,59 @@ async function whatsappTab() {
   return tab;
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function waitForTabComplete(tabId, timeoutMs = 10000) {
-  const current = await chrome.tabs.get(tabId);
-  if (current.status === 'complete') return;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); reject(new Error('A aba do WhatsApp Web não terminou de carregar em 10 segundos.')); }, timeoutMs);
-    const listener = (updatedTabId, changeInfo) => {
-      if (updatedTabId !== tabId || changeInfo.status !== 'complete') return;
-      clearTimeout(timer); chrome.tabs.onUpdated.removeListener(listener); resolve();
-    };
-    chrome.tabs.onUpdated.addListener(listener);
+function isMissingContentScript(error) {
+  const details = String(error?.message || error || '').toLowerCase();
+  return [
+    'receiving end does not exist',
+    'could not establish connection',
+    'no response from the content script',
+    'a mensagem não recebeu resposta',
+    'message port closed'
+  ].some(fragment => details.includes(fragment));
+}
+async function injectWhatsAppContentScripts(tabId) {
+  const tab = await chrome.tabs.get(tabId);
+  let hostname = '';
+  try { hostname = new URL(tab.url || '').hostname; } catch {}
+  if (hostname !== 'web.whatsapp.com') {
+    throw new Error('A injeção de contingência só é permitida em web.whatsapp.com.');
+  }
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    files: ['content/whatsapp-adapter.js', 'content/content-legacy.js']
   });
 }
 async function sendMessageSafe(tabId, message) {
-  await waitForTabComplete(tabId);
-  // Os content scripts são carregados pelo manifest, em ordem, ao abrir o WhatsApp Web.
-  // O retry cobre a janela entre document_idle e o registro dos listeners.
-  const backoff = [300, 800, 1500];
-  let lastError = null;
-  for (let attempt = 0; attempt < backoff.length; attempt++) {
-    await sleep(backoff[attempt]);
-    const response = await new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, result => {
+  const action = message.acao || message.type;
+  return sendWithRetry(
+    () => new Promise((resolve, reject) => chrome.tabs.sendMessage(tabId, message, result => {
       const error = chrome.runtime.lastError;
-      if (error) reject(new Error(error.message)); else resolve(result);
-    })).catch(error => { lastError = error; return null; });
-    if (response != null) {
-      console.log('[V10][popup→content] resposta', { acao: message.acao || message.type, attempt: attempt + 1, timestamp: Date.now() });
-      return response;
+      if (error) reject(new Error(error.message));
+      else resolve(result);
+    })),
+    {
+      delays: [0, 300, 650, 1000, 1500, 2000, 2500],
+      errorMessage: 'Não foi possível comunicar com a extensão dentro do WhatsApp Web. Confirme que a aba está aberta e atualize-a com F5.',
+      onFailure: async (error, attempt) => {
+        if (!isMissingContentScript(error)) return;
+        try {
+          await injectWhatsAppContentScripts(tabId);
+          console.info('[V10][popup] scripts do WhatsApp preparados sob demanda', { acao: action, tentativa: attempt });
+        } catch (injectionError) {
+          console.warn('[V10][popup] injeção de contingência ainda não disponível', {
+            acao: action,
+            tentativa: attempt,
+            erro: injectionError?.message || String(injectionError)
+          });
+        }
+      },
+      onRetry: ({ attempt, error }) => console.warn('[V10][popup] aguardando resposta do WhatsApp', {
+        acao: action,
+        tentativa: attempt,
+        erro: error?.message || String(error)
+      })
     }
-    console.warn('[V10][popup] content script ainda não respondeu', { acao: message.acao || message.type, tentativa: attempt + 1, erro: lastError?.message || 'sem resposta' });
-  }
-  throw new Error(`Content script do WhatsApp Web não respondeu. Recarregue a aba (F5) e tente novamente. ${lastError?.message || ''}`.trim());
+  );
 }
 async function sendWhatsApp(tabId, message) { return sendMessageSafe(tabId, message); }
 async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
