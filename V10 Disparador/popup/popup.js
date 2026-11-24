@@ -49,13 +49,32 @@ async function restoreActiveDispatch() {
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
 async function whatsappTab() {
-  const tabs = await chrome.tabs.query({});
-  const tab = tabs.find(candidate => {
+  if (!chrome.tabs?.query) {
+    const error = new Error('Este ambiente não disponibilizou a API de sessões do WhatsApp para a extensão.');
+    error.code = 'WHATSAPP_TABS_API_UNAVAILABLE';
+    throw error;
+  }
+
+  let tabs = [];
+  try {
+    // No Painel MultiSessão, a extensão é carregada na partição da conta.
+    // Consultar diretamente a URL evita depender de "aba ativa" no Electron.
+    tabs = await chrome.tabs.query({ url: 'https://web.whatsapp.com/*' });
+  } catch (error) {
+    console.warn('[V10][popup] consulta filtrada de sessões indisponível; tentando consulta ampla', error?.message || error);
+  }
+
+  if (!Array.isArray(tabs) || !tabs.length) {
+    try { tabs = await chrome.tabs.query({}); } catch { tabs = []; }
+  }
+
+  const tab = (Array.isArray(tabs) ? tabs : []).find(candidate => {
     try { return new URL(candidate.url || '').hostname === 'web.whatsapp.com'; } catch { return false; }
   });
+
   if (!tab?.id) {
-    const error = new Error('Abra uma aba em https://web.whatsapp.com/ antes de iniciar.');
-    error.code = 'NO_WHATSAPP_TAB';
+    const error = new Error('Nenhuma sessão WhatsApp foi encontrada neste perfil da extensão. No Painel MultiSessão, carregue a V10 no mesmo número/conta e abra a sessão WhatsApp.');
+    error.code = 'NO_WHATSAPP_SESSION';
     throw error;
   }
   return tab;
