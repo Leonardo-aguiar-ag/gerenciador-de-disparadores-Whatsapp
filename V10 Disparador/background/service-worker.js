@@ -1,6 +1,6 @@
 const DEFAULTS = {
   backendUrl: 'http://localhost:3000',
-  mode: 'simulation',
+  mode: 'web',
   theme: 'system',
   defaultCountry: '55',
   minDelay: 8,
