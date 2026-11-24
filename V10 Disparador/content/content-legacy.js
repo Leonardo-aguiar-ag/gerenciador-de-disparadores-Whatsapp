@@ -39,10 +39,11 @@ if (!window.botListenerAdded) {
     }
 
     const dispatchState = {
-        rodando: false, pausado: false, total: 0, enviados: 0,
+        rodando: false, pausado: false, manualPause: false, autoPause: false, esperandoHorario: false, total: 0, enviados: 0,
         contadorLote: 0, fila: null, duplicatas: {}, optOut: {}, warmUpLimite: null,
         ignoraDuplicatas: false, numeroConta: null, runId: 0
     };
+    window.__v10DispatchState = dispatchState;
 
     function sendMsg(msg) { try { chrome.runtime.sendMessage(msg); } catch (e) {} }
 
@@ -51,7 +52,7 @@ if (!window.botListenerAdded) {
     function verificarConexao() {
         try {
             const painel = document.querySelector('#pane-side, div[data-testid="chat-list"]');
-            const qr = document.querySelector('[data-testid="qrcode"], canvas');
+            const qr = document.querySelector('[data-testid="qrcode"], [data-testid="qr-code"], [aria-label*="QR code" i]');
             const input = document.querySelector('footer div[contenteditable="true"]');
             let conectado = false, numero = "Número Oculto", nome = "Conta Autenticada";
             if ((painel || input) && !qr) {
@@ -71,7 +72,8 @@ if (!window.botListenerAdded) {
             } else if (!conectado) {
                 ultimoEstadoConectado = false;
             }
-        } catch (e) { sendMsg({ acao: "wa_status", info: { conectado: false } }); }
+            return conectado;
+        } catch (e) { sendMsg({ acao: "wa_status", info: { conectado: false } }); return false; }
     }
     setInterval(verificarConexao, 2000);
     verificarConexao();
@@ -152,6 +154,10 @@ if (!window.botListenerAdded) {
                 sendResponse({ accepted: false, error: "Já existe um disparo em andamento nesta aba." });
                 return true;
             }
+            if (!verificarConexao()) {
+                sendResponse({ accepted: false, error: "WhatsApp Web não está conectado. Conecte a sessão e tente novamente." });
+                return true;
+            }
             if (!fila || !Array.isArray(fila.lista) || !fila.lista.length || !Array.isArray(fila.scripts) || !fila.scripts.filter(s => String(s || '').trim()).length) {
                 sendResponse({ accepted: false, error: "Lista ou scripts vazios." });
                 return true;
@@ -160,9 +166,16 @@ if (!window.botListenerAdded) {
             sendResponse({ accepted: dispatchState.rodando });
             return true;
         }
-        else if (req.acao === "pausar") { dispatchState.pausado = !dispatchState.pausado; sendMsg({ acao: "dispatch_status", pausado: dispatchState.pausado }); }
+        else if (req.acao === "pausar") {
+            if (!dispatchState.rodando) { sendResponse({ ok: false, error: "Não existe disparo ativo para pausar." }); return true; }
+            dispatchState.manualPause = !dispatchState.manualPause;
+            dispatchState.pausado = dispatchState.manualPause || dispatchState.autoPause;
+            sendMsg({ acao: "dispatch_status", pausado: dispatchState.pausado, enviados: dispatchState.enviados, total: dispatchState.total });
+            sendResponse({ ok: true, paused: dispatchState.pausado });
+            return true;
+        }
         else if (req.acao === "pausar_auto") { dispatchState.pausado = true; sendMsg({ acao: "dispatch_status", pausado: true }); }
-        else if (req.acao === "parar") { dispatchState.rodando = false; dispatchState.pausado = false; dispatchState.runId++; ID_DISPARO++; sendMsg({ acao: "dispatch_status", parado: true, enviados: dispatchState.enviados, total: dispatchState.total }); }
+        else if (req.acao === "parar") { const wasRunning = dispatchState.rodando; dispatchState.rodando = false; dispatchState.pausado = false; dispatchState.manualPause = false; dispatchState.autoPause = false; dispatchState.esperandoHorario = false; dispatchState.runId++; ID_DISPARO++; sendMsg({ acao: "dispatch_status", parado: true, enviados: dispatchState.enviados, total: dispatchState.total }); sendResponse({ ok: true, stopped: wasRunning }); return true; }
         else if (req.acao === "ping") verificarConexao();
     });
 
@@ -197,6 +210,18 @@ if (!window.botListenerAdded) {
             campo.dispatchEvent(new KeyboardEvent('keyup', opts));
             return true;
         } catch (e) { return false; }
+    }
+
+    function dentroHorarioComercial(config = {}) {
+        if (!config.businessEnabled) return true;
+        const now = new Date();
+        const weekdays = Array.isArray(config.weekdays) ? config.weekdays.map(Number) : [1, 2, 3, 4, 5];
+        if (!weekdays.includes(now.getDay())) return false;
+        const toMinutes = value => { const match = /^(\d{2}):(\d{2})$/.exec(String(value || '')); return match ? Number(match[1]) * 60 + Number(match[2]) : 0; };
+        const current = now.getHours() * 60 + now.getMinutes();
+        const start = toMinutes(config.businessStart || '08:00');
+        const end = toMinutes(config.businessEnd || '20:00');
+        return start <= end ? current >= start && current < end : current >= start || current < end;
     }
 
     /* ENVIO */
@@ -253,10 +278,13 @@ if (!window.botListenerAdded) {
         const runId = ++dispatchState.runId;
         dispatchState.rodando = true;
         dispatchState.pausado = false;
+        dispatchState.manualPause = false;
+        dispatchState.autoPause = false;
+        dispatchState.esperandoHorario = false;
         dispatchState.fila = fila;
         dispatchState.duplicatas = duplicatas || {};
         dispatchState.optOut = optOut || {};
-        dispatchState.warmUpLimite = warmUpLimite;
+        dispatchState.warmUpLimite = warmUpLimite == null ? null : Math.max(0, Number(warmUpLimite));
         dispatchState.ignoraDuplicatas = !!ignoraDuplicatas;
         dispatchState.total = fila.lista.length;
         dispatchState.enviados = fila.indice || 0;
@@ -265,11 +293,24 @@ if (!window.botListenerAdded) {
 
         for (let i = fila.indice || 0; i < fila.lista.length; i++) {
             if (!dispatchState.rodando || dispatchState.runId !== runId) break;
-            while (dispatchState.pausado && dispatchState.rodando && dispatchState.runId === runId) await sleep(1000);
+            const runConfig = fila.config || {};
+            while (dispatchState.rodando && dispatchState.runId === runId) {
+                if (dispatchState.pausado) { await sleep(1000); continue; }
+                if (dentroHorarioComercial(runConfig)) break;
+                if (!dispatchState.esperandoHorario) {
+                    dispatchState.esperandoHorario = true;
+                    sendMsg({ acao: "dispatch_status", esperandoHorario: true, enviados: dispatchState.enviados, total: dispatchState.total });
+                }
+                await sleep(30000);
+            }
+            if (dispatchState.esperandoHorario) {
+                dispatchState.esperandoHorario = false;
+                sendMsg({ acao: "dispatch_status", esperandoHorario: false, enviados: dispatchState.enviados, total: dispatchState.total });
+            }
             if (!dispatchState.rodando || dispatchState.runId !== runId) break;
             if (dispatchState.warmUpLimite !== null && dispatchState.warmUpLimite <= 0) {
                 dispatchState.rodando = false;
-                sendMsg({ acao: "dispatch_concluido" });
+                sendMsg({ acao: "dispatch_concluido", limiteAtingido: true, enviados: dispatchState.enviados, total: dispatchState.total });
                 return;
             }
             const cliente = fila.lista[i];
@@ -326,9 +367,13 @@ if (!window.botListenerAdded) {
                 dispatchState.contadorLote++;
                 if (dispatchState.contadorLote >= (Number(configFila.qtdLote) || 20)) {
                     dispatchState.contadorLote = 0;
+                    dispatchState.autoPause = true;
                     dispatchState.pausado = true;
+                    sendMsg({ acao: "dispatch_status", pausado: true, enviados: dispatchState.enviados, total: dispatchState.total });
                     await sleep((Number(configFila.tempoLoteMin) || 5) * 60 * 1000);
-                    dispatchState.pausado = false;
+                    dispatchState.autoPause = false;
+                    dispatchState.pausado = dispatchState.manualPause;
+                    sendMsg({ acao: "dispatch_status", pausado: dispatchState.pausado, enviados: dispatchState.enviados, total: dispatchState.total });
                 }
             }
             if (i < fila.lista.length - 1 && dispatchState.rodando && dispatchState.runId === runId && !dispatchState.pausado) {
@@ -341,6 +386,6 @@ if (!window.botListenerAdded) {
         if (dispatchState.runId !== runId) return;
         dispatchState.rodando = false;
         dispatchState.pausado = false;
-        sendMsg({ acao: "dispatch_concluido" });
+        sendMsg({ acao: "dispatch_concluido", enviados: dispatchState.enviados, total: dispatchState.total });
     }
 }

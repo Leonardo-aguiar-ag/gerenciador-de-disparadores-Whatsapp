@@ -6,6 +6,7 @@ import path from 'node:path';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'v10-'));
 process.env.DB_FILE = path.join(dir, 'v10.sqlite');
+process.env.BACKUP_DIR = path.join(dir, 'backups');
 process.env.PORT = '0';
 await import('../dist/server.js');
 const { server } = await import('../dist/server.js');
@@ -22,3 +23,14 @@ test('scripts usam variações distintas antes de repetir o ciclo', async () => 
 test('scripts podem ser salvos, listados e excluídos', async () => { const saved = await request('/api/scripts', { method: 'POST', body: JSON.stringify({ scriptId: 'teste-scripts', name: 'Teste Scripts', content: ['{Oi|Olá} [NOME]', 'Segunda mensagem'] }) }); assert.equal(saved.status, 201); assert.equal(saved.body.version, 1); const listed = await request('/api/scripts'); const item = listed.body.data.find(x => x.id === saved.body.id); assert.deepEqual(item.content, ['{Oi|Olá} [NOME]', 'Segunda mensagem']); const removed = await request(`/api/scripts/${encodeURIComponent(saved.body.id)}`, { method: 'DELETE' }); assert.equal(removed.body.ok, true); const after = await request('/api/scripts'); assert.equal(after.body.data.some(x => x.id === saved.body.id), false); });
 
 test('controles de fila pausam, retomam e param com segurança', async () => { const pause = await request('/api/messages/control', { method: 'POST', body: JSON.stringify({ action: 'pause' }) }); assert.equal(pause.body.queueState, 'paused'); const paused = await request('/api/messages/process', { method: 'POST', body: JSON.stringify({ mode: 'simulation' }) }); assert.equal(paused.body.queueState, 'paused'); const resume = await request('/api/messages/control', { method: 'POST', body: JSON.stringify({ action: 'resume' }) }); assert.equal(resume.body.queueState, 'running'); const stop = await request('/api/messages/control', { method: 'POST', body: JSON.stringify({ action: 'stop' }) }); assert.equal(stop.body.queueState, 'stopped'); });
+
+test('backup inclui coleções e restauração reimporta o conteúdo sem corromper JSON', async () => {
+  const backup = await request('/api/backups', { method: 'POST', body: '{}' });
+  assert.equal(backup.status, 201);
+  for (const key of ['contacts', 'campaigns', 'messages', 'optOuts', 'scriptVersions', 'auditLogs']) assert.ok(Array.isArray(backup.body.data[key]), `backup deve conter ${key}`);
+  const restored = await request('/api/backups/restore', { method: 'POST', body: JSON.stringify(backup.body.data) });
+  assert.equal(restored.status, 200);
+  assert.equal(restored.body.collections.contacts, backup.body.data.contacts.length);
+  assert.equal(restored.body.collections.campaigns, backup.body.data.campaigns.length);
+  assert.equal(restored.body.collections.messages, backup.body.data.messages.length);
+});

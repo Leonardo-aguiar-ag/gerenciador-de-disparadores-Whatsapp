@@ -83,9 +83,57 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse) {
     if (method === 'GET' && url.pathname === '/api/opt-outs') return send(res, 200, { data: db.prepare('SELECT * FROM opt_outs ORDER BY created_at DESC').all() });
     if (method === 'DELETE' && url.pathname.startsWith('/api/opt-outs/')) { const phone = normalizePhone(url.pathname.split('/').pop()); db.prepare('DELETE FROM opt_outs WHERE phone=?').run(phone); db.prepare('UPDATE contacts SET opted_out=0, updated_at=? WHERE phone=?').run(now(), phone); return send(res, 200, { ok: true }); }
     if (method === 'GET' && url.pathname === '/api/logs') return send(res, 200, { data: db.prepare('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 500').all().map((x: any) => ({ ...x, details: parse(x.details, {}) })) });
-    if (method === 'POST' && url.pathname === '/api/backups') { const dir = path.resolve(process.env.BACKUP_DIR || './data/backups'); fs.mkdirSync(dir, { recursive: true }); const file = path.join(dir, `v10-${Date.now()}.json`); const data = { version: VERSION, exportedAt: now(), contacts: db.prepare('SELECT * FROM contacts').all(), campaigns: db.prepare('SELECT * FROM campaigns').all(), messages: db.prepare('SELECT * FROM messages').all(), optOuts: db.prepare('SELECT * FROM opt_outs').all() }; fs.writeFileSync(file, JSON.stringify(data, null, 2)); db.prepare('INSERT INTO backups(id,file_path,created_at,size_bytes) VALUES(?,?,?,?)').run(makeId('bak'), file, now(), fs.statSync(file).size); return send(res, 201, { ok: true, file }); }
-    if (method === 'POST' && url.pathname === '/api/backups/restore') { const b = await body(req); const source = b.data || b; if (!source || !Array.isArray(source.contacts)) return error(res, 400, 'Backup inválido'); const t = now(); db.exec('BEGIN'); try { for (const c of source.contacts) { const phone = normalizePhone(c.phone); if (!isValidPhone(phone)) continue; db.prepare('INSERT OR REPLACE INTO contacts(id,phone,name,fields,tags,funnel_stage,opted_out,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)').run(c.id || makeId('ct'), phone, c.name || '', json(c.fields || {}), json(c.tags || []), c.funnel_stage || c.funnelStage || 'novo', c.opted_out || c.optedOut ? 1 : 0, c.created_at || t, t); } db.exec('COMMIT'); log(db, 'warn', 'backup.restored', { contacts: source.contacts.length }); return send(res, 200, { ok: true, restored: source.contacts.length }); } catch (e) { db.exec('ROLLBACK'); throw e; } }
-    if (method === 'GET' && url.pathname === '/api/updates/check') { const response = await fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`, { headers: { 'user-agent': 'gerenciador-disparadores-v10' } }); if (!response.ok) return send(res, 200, { currentVersion: VERSION, available: false, message: 'Nenhuma release publicada ainda.' }); const release: any = await response.json(); return send(res, 200, { currentVersion: VERSION, latestVersion: String(release.tag_name || '').replace(/^v/, ''), available: String(release.tag_name || '').replace(/^v/, '') !== VERSION, notes: release.body || '', url: release.html_url, publishedAt: release.published_at }); }
+    if (method === 'POST' && url.pathname === '/api/backups') {
+      const dir = path.resolve(process.env.BACKUP_DIR || './data/backups'); fs.mkdirSync(dir, { recursive: true });
+      const file = path.join(dir, `v10-${Date.now()}.json`);
+      const data = { version: VERSION, exportedAt: now(), contacts: db.prepare('SELECT * FROM contacts').all(), campaigns: db.prepare('SELECT * FROM campaigns').all(), messages: db.prepare('SELECT * FROM messages').all(), optOuts: db.prepare('SELECT * FROM opt_outs').all(), scriptVersions: db.prepare('SELECT * FROM script_versions').all(), auditLogs: db.prepare('SELECT * FROM audit_logs').all() };
+      fs.writeFileSync(file, JSON.stringify(data, null, 2));
+      db.prepare('INSERT INTO backups(id,file_path,created_at,size_bytes) VALUES(?,?,?,?)').run(makeId('bak'), file, now(), fs.statSync(file).size);
+      return send(res, 201, { ok: true, file, data });
+    }
+    if (method === 'POST' && url.pathname === '/api/backups/restore') {
+      const b = await body(req); const source = b.data || b;
+      if (!source || !Array.isArray(source.contacts)) return error(res, 400, 'Backup inválido');
+      const t = now(); const counts = { contacts: 0, campaigns: 0, messages: 0, optOuts: 0, scriptVersions: 0, auditLogs: 0 };
+      const stored = (value: any, fallback: any) => typeof value === 'string' ? parse(value, fallback) : (value ?? fallback);
+      db.exec('BEGIN');
+      try {
+        for (const c of source.contacts) {
+          const phone = normalizePhone(c.phone); if (!isValidPhone(phone)) continue;
+          db.prepare('INSERT OR REPLACE INTO contacts(id,phone,name,fields,tags,funnel_stage,opted_out,consent_source,consent_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(c.id || makeId('ct'), phone, c.name || '', json(stored(c.fields, {})), json(stored(c.tags, [])), c.funnel_stage || c.funnelStage || 'novo', c.opted_out || c.optedOut ? 1 : 0, c.consent_source || c.consentSource || null, c.consent_at || c.consentAt || null, c.created_at || c.createdAt || t, t);
+          counts.contacts++;
+        }
+        for (const c of source.campaigns || []) {
+          if (!c.name) continue;
+          db.prepare('INSERT OR REPLACE INTO campaigns(id,name,status,mode,body,config,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)').run(c.id || makeId('cmp'), c.name, c.status || 'draft', c.mode || 'simulation', c.body || '', json(stored(c.config, {})), c.created_at || c.createdAt || t, t);
+          counts.campaigns++;
+        }
+        for (const item of source.optOuts || source.opt_outs || []) {
+          const phone = normalizePhone(item.phone); if (!isValidPhone(phone)) continue;
+          db.prepare('INSERT OR REPLACE INTO opt_outs(id,phone,reason,source,created_at) VALUES(?,?,?,?,?)').run(item.id || makeId('out'), phone, item.reason || 'user_request', item.source || 'manual', item.created_at || item.createdAt || t);
+          db.prepare('UPDATE contacts SET opted_out=1, updated_at=? WHERE phone=?').run(t, phone);
+          counts.optOuts++;
+        }
+        for (const m of source.messages || []) {
+          const phone = normalizePhone(m.to_phone || m.to); if (!isValidPhone(phone)) continue;
+          db.prepare('INSERT OR REPLACE INTO messages(id,campaign_id,contact_id,to_phone,body,mode,state,attempts,max_attempts,next_attempt_at,provider_message_id,event_id,error,created_at,updated_at,locked_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)').run(m.id || makeId('msg'), m.campaign_id || m.campaignId || null, m.contact_id || m.contactId || null, phone, m.body || '', m.mode || 'simulation', m.state || 'pending', Number(m.attempts || 0), Number(m.max_attempts || m.maxAttempts || 3), m.next_attempt_at || m.nextAttemptAt || null, m.provider_message_id || m.providerMessageId || null, m.event_id || m.eventId || null, m.error || null, m.created_at || m.createdAt || t, m.updated_at || m.updatedAt || t, m.locked_at || m.lockedAt || null);
+          counts.messages++;
+        }
+        for (const s of source.scriptVersions || source.script_versions || []) {
+          if (!s.script_id && !s.scriptId) continue;
+          db.prepare('INSERT OR REPLACE INTO script_versions(id,script_id,version,name,content,created_at) VALUES(?,?,?,?,?,?)').run(s.id || makeId('scr'), s.script_id || s.scriptId, Number(s.version || 1), s.name || 'Scripts', json(stored(s.content, [])), s.created_at || s.createdAt || t);
+          counts.scriptVersions++;
+        }
+        for (const item of source.auditLogs || source.audit_logs || []) {
+          db.prepare('INSERT OR REPLACE INTO audit_logs(id,level,event,details,created_at) VALUES(?,?,?,?,?)').run(item.id || makeId('log'), item.level || 'info', item.event || 'backup.imported', json(stored(item.details, {})), item.created_at || item.createdAt || t);
+          counts.auditLogs++;
+        }
+        db.exec('COMMIT');
+        log(db, 'warn', 'backup.restored', counts);
+        return send(res, 200, { ok: true, restored: counts.contacts, collections: counts });
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    }
+    if (method === 'GET' && url.pathname === '/api/updates/check') { const response = await fetch(`https://api.github.com/repos/${REPOSITORY}/releases/latest`, { headers: { 'user-agent': 'gerenciador-disparadores-v10' } }); if (!response.ok) return send(res, 200, { currentVersion: VERSION, available: false, message: 'Nenhuma release publicada ainda.' }); const release: any = await response.json(); const latestVersion = String(release.tag_name || '').replace(/^v/, ''); const parts = (value: string) => value.split('.').map(x => Number.parseInt(x, 10) || 0); const latest = parts(latestVersion), current = parts(VERSION); let comparison = 0; for (let i = 0; i < Math.max(latest.length, current.length); i++) { if ((latest[i] || 0) !== (current[i] || 0)) { comparison = (latest[i] || 0) > (current[i] || 0) ? 1 : -1; break; } } return send(res, 200, { currentVersion: VERSION, latestVersion, available: comparison > 0, notes: release.body || '', url: release.html_url, publishedAt: release.published_at }); }
     if (method === 'GET' && url.pathname === '/api/metrics') return send(res, 200, { campaignsCreated: db.prepare('SELECT COUNT(*) count FROM campaigns').get().count, contactsImported: db.prepare('SELECT COUNT(*) count FROM contacts').get().count, messagesQueued: db.prepare('SELECT COUNT(*) count FROM messages').get().count, optOuts: db.prepare('SELECT COUNT(*) count FROM opt_outs').get().count });
     if (url.pathname.startsWith('/api/')) return error(res, 404, 'Rota não encontrada');
     if (method === 'GET') { const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1); const target = path.resolve(publicDir, file); if (!target.startsWith(publicDir) || !fs.existsSync(target)) return error(res, 404, 'Não encontrado'); res.writeHead(200, { 'content-type': target.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8' }); return res.end(fs.readFileSync(target)); }

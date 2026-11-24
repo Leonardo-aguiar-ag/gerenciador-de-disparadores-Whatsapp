@@ -11,13 +11,74 @@ export function isValidPhone(value) {
   return /^\d{12,15}$/.test(digits);
 }
 
-export function parseContactLine(line) {
-  const parts = String(line ?? '').split(/[;,\t]/).map(v => v.trim());
-  const phone = normalizePhone(parts.shift() || '');
-  const name = parts.shift() || '';
+function detectDelimiter(text) {
+  const counts = new Map([[';', 0], [',', 0], ['\t', 0]]);
+  let quoted = false;
+  let records = 0;
+  for (let i = 0; i < text.length && records < 5; i++) {
+    const char = text[i];
+    if (char === '"') {
+      if (quoted && text[i + 1] === '"') { i++; continue; }
+      quoted = !quoted;
+    } else if (!quoted && counts.has(char)) {
+      counts.set(char, counts.get(char) + 1);
+    } else if (!quoted && (char === '\n' || char === '\r')) {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      records++;
+    }
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function parseDelimitedRows(input) {
+  const text = String(input ?? '').replace(/^\uFEFF/, '');
+  if (!text) return [];
+  const delimiter = detectDelimiter(text);
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let quoted = false;
+  const finishCell = () => { row.push(cell.trim()); cell = ''; };
+  const finishRow = () => {
+    finishCell();
+    if (row.some(value => value !== '')) rows.push(row);
+    row = [];
+  };
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (char === '"' && (quoted || cell.trim() === '')) {
+      if (quoted && text[i + 1] === '"') { cell += '"'; i++; }
+      else quoted = !quoted;
+      continue;
+    }
+    if (!quoted && char === delimiter) { finishCell(); continue; }
+    if (!quoted && (char === '\n' || char === '\r')) {
+      finishRow();
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      continue;
+    }
+    cell += char;
+  }
+  if (cell !== '' || row.length) finishRow();
+  return rows;
+}
+
+function contactFromParts(parts) {
+  const values = [...parts];
+  const phone = normalizePhone(values.shift() || '');
+  const name = values.shift() || '';
   const fields = {};
-  parts.forEach((value, index) => { fields[`campo_${index + 1}`] = value; });
+  values.forEach((value, index) => { fields[`campo_${index + 1}`] = value; });
   return { phone, name, fields, valid: isValidPhone(phone) };
+}
+
+export function parseContactLine(line) {
+  return contactFromParts(parseDelimitedRows(String(line ?? ''))[0] || []);
+}
+
+export function parseContactList(text) {
+  return parseDelimitedRows(text).map(contactFromParts);
 }
 
 export function interpolate(template, contact = {}) {

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseScriptImport, parseScriptText } from '../../shared/script-format.js';
+import { parseContactList, parseContactLine } from '../../shared/phone.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -30,4 +31,34 @@ test('importação de scripts aceita TXT por blocos e JSON compatível com a V9/
   assert.deepEqual(parseScriptImport('versao.json', '[{"texto":"Mensagem A"},{"text":"Mensagem B"}]'), ['Mensagem A', 'Mensagem B']);
   assert.deepEqual(parseScriptImport('scripts.txt', 'A\n---\nB'), ['A', 'B']);
   assert.throws(() => parseScriptImport('invalid.json', '{'), /JSON inválido/);
+});
+
+test('parser de contatos respeita CSV com aspas, delimitadores embutidos e campos multilinha', () => {
+  const input = '\uFEFFtelefone,nome,observacao\r\n"85999999999","Silva, João","cliente; premium"\r\n"85888888888","Maria","linha 1\nlinha 2"';
+  const rows = parseContactList(input);
+  assert.equal(rows.length, 3, 'inclui o cabeçalho para ser exibido como inválido na prévia');
+  assert.equal(rows[0].valid, false);
+  assert.equal(rows[1].phone, '5585999999999');
+  assert.equal(rows[1].name, 'Silva, João');
+  assert.equal(rows[1].fields.campo_1, 'cliente; premium');
+  assert.equal(rows[2].fields.campo_1, 'linha 1\nlinha 2');
+  assert.equal(rows[2].valid, true);
+});
+
+test('parser mantém compatibilidade com linhas simples separadas por ponto e vírgula ou tabulação', () => {
+  assert.equal(parseContactLine('85999999999;João').name, 'João');
+  const rows = parseContactList('85888888888\tMaria\tVIP');
+  assert.equal(rows[0].phone, '5585888888888');
+  assert.equal(rows[0].fields.campo_1, 'VIP');
+});
+
+test('início do disparo exige conexão e pausa sem execução não ativa estado fantasma', () => {
+  const content = fs.readFileSync(path.join(root, 'content/content-legacy.js'), 'utf8');
+  const worker = fs.readFileSync(path.join(root, 'background/service-worker.js'), 'utf8');
+  assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
+  assert.match(content, /if \(!dispatchState\.rodando\).*Não existe disparo ativo para pausar/);
+  assert.match(content, /dispatchState\.warmUpLimite = warmUpLimite == null \? null/);
+  assert.match(content, /dispatch_concluido", limiteAtingido: true, enviados: dispatchState\.enviados/);
+  assert.match(worker, /active:\s*message\.parado\s*\?\s*false\s*:\s*Boolean\(active\.active\)/);
+  assert.match(worker, /active: Boolean\(active\.active\)/, 'resultados tardios não devem reativar uma fila parada');
 });
