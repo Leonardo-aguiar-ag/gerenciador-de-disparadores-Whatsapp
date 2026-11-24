@@ -47,7 +47,18 @@ async function restoreActiveDispatch() {
   updateRun(active.sent || 0, active.sent || 0, active.waitingForBusinessHours ? 'Aguardando horário comercial...' : active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.lastContact || '—');
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
-function whatsappTab() { return chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }).then(tabs => { const tab = tabs[0]; if (!tab?.id) throw new Error('Abra o WhatsApp Web e mantenha a sessão conectada.'); return tab; }); }
+async function whatsappTab() {
+  const tabs = await chrome.tabs.query({});
+  const tab = tabs.find(candidate => {
+    try { return new URL(candidate.url || '').hostname === 'web.whatsapp.com'; } catch { return false; }
+  });
+  if (!tab?.id) {
+    const error = new Error('Abra uma aba em https://web.whatsapp.com/ antes de iniciar.');
+    error.code = 'NO_WHATSAPP_TAB';
+    throw error;
+  }
+  return tab;
+}
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function waitForTabComplete(tabId, timeoutMs = 10000) {
   const current = await chrome.tabs.get(tabId);
@@ -127,7 +138,23 @@ async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
   });
 }
 async function sendWhatsAppCommand(action) { const tab = await whatsappTab(); return sendWhatsApp(tab.id, { acao: action }); }
-
+async function verifyConnection() {
+  $('connectionStatus').textContent = 'Verificando conexão...';
+  try {
+    const tab = await whatsappTab();
+    const r = await sendWhatsApp(tab.id, { type: 'whatsapp:status' });
+    const connected = Boolean(r?.data?.connected);
+    const reason = r?.data?.reason || 'A sessão não foi reconhecida.';
+    $('connectionStatus').textContent = connected ? 'Conectado ao WhatsApp Web.' : `Aba encontrada, mas não conectada: ${reason}`;
+    $('runConnectionStatus').textContent = connected ? '● Conectado: Conta Autenticada' : '● WhatsApp Web não autenticado';
+    $('runPhone').textContent = r?.data?.phone || '—';
+  } catch (error) {
+    $('connectionStatus').textContent = `Falha ao verificar: ${error.message}`;
+    $('runConnectionStatus').textContent = error.code === 'NO_WHATSAPP_TAB' ? '● WhatsApp Web não encontrado' : `● Falha na conexão: ${error.message}`;
+    $('runPhone').textContent = '—';
+  }
+}
+$('verifyConnection').onclick = verifyConnection;
 function switchTab(name) { document.querySelectorAll('.tab-btn').forEach(x => x.classList.toggle('active', x.dataset.target === name)); document.querySelectorAll('.aba').forEach(x => x.classList.toggle('active', x.id === name)); }
 document.querySelectorAll('.tab-btn').forEach(btn => btn.onclick = () => { switchTab(btn.dataset.target); if (btn.dataset.target === 'dashboard') refreshDashboard(); });
 
@@ -163,7 +190,11 @@ async function refreshWhatsAppConnection() {
     const connected = Boolean(r?.data?.connected);
     $('runConnectionStatus').textContent = connected ? '● Conectado: Conta Autenticada' : '● WhatsApp Web não autenticado';
     $('runPhone').textContent = r?.data?.phone || '—';
-  } catch { $('runConnectionStatus').textContent = '● WhatsApp Web não encontrado'; $('runPhone').textContent = '—'; }
+  } catch (error) {
+    const missing = error?.code === 'NO_WHATSAPP_TAB';
+    $('runConnectionStatus').textContent = missing ? '● WhatsApp Web não encontrado' : `● Falha na conexão: ${error.message}`;
+    $('runPhone').textContent = '—';
+  }
 }
 function renderChart() { const days = []; for (let i = 6; i >= 0; i--) { const date = new Date(Date.now() - i * 86400000); const key = date.toISOString().slice(0, 10); const count = allLogs.filter(x => String(x.created_at || '').slice(0, 10) === key && /sent|delivered|read|queue.processed|web.ok/.test(x.event || '')).length; days.push({ label: `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}`, count }); } const max = Math.max(1, ...days.map(x => x.count)); $('chart').innerHTML = days.map(x => `<div class="chart-col"><div class="chart-bar" style="height:${Math.max(3, x.count / max * 78)}px" title="${x.count}"></div><span>${x.label}</span></div>`).join(''); }
 function renderLogs() {

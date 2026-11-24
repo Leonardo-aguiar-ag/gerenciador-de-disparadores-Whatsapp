@@ -58,9 +58,11 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   const worker = fs.readFileSync(path.join(root, 'background/service-worker.js'), 'utf8');
   const popup = fs.readFileSync(path.join(root, 'popup/popup.js'), 'utf8');
   assert.match(popup, /function sendMessageSafe/);
+  assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
   assert.match(popup, /chrome\.tabs\.onUpdated/);
   assert.match(popup, /const backoff = \[500, 1000, 2000\]/);
   assert.match(popup, /Não foi possível preparar o WhatsApp Web/);
+  assert.match(popup, /Falha na conexão: \$\{error\.message\}/);
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
   assert.match(content, /conversation-panel-wrapper/);
   assert.match(content, /function elementoVisivel/);
