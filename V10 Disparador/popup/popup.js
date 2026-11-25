@@ -43,9 +43,9 @@ async function restoreActiveDispatch() {
     const current = (await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve))).data?.v10ActiveDispatch || active;
     if (!current.active) { finishRun(current.sent || 0, current.error ? 1 : 0, current.error || (current.stoppedAt ? 'Fila parada' : 'Disparo concluído'), current.sent || 0); return; }
     dispatchPaused = Boolean(current.paused);
-    updateRun(current.sent || 0, current.sent || 0, current.waitingForBusinessHours ? 'Aguardando horário comercial...' : current.paused ? 'Fila pausada' : liveDispatch?.active ? 'Disparo em andamento...' : 'Fila persistida; monitorando a aba...', current.lastContact || '—');
+    updateRun(current.sent || 0, current.sent || 0, current.waitingForBusinessHours ? 'Aguardando horário comercial...' : current.paused ? 'Fila pausada' : liveDispatch?.active ? 'Disparo em andamento...' : 'Fila persistida; monitorando a aba...', current.currentName || current.currentContact || current.lastContact || '—');
   }, 1000), poll: null };
-  updateRun(active.sent || 0, active.sent || 0, active.waitingForBusinessHours ? 'Aguardando horário comercial...' : active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.lastContact || '—');
+    updateRun(active.sent || 0, active.sent || 0, active.waitingForBusinessHours ? 'Aguardando horário comercial...' : active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.currentName || active.currentContact || active.lastContact || '—');
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
 async function whatsappTab() {
@@ -122,6 +122,7 @@ async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
       }
       if (message.acao === 'dispatch_status') {
         dispatchPaused = Boolean(message.pausado);
+        if (message.contato || message.nome) $('runContact').textContent = message.nome || message.contato;
         $('runStatus').textContent = message.esperandoHorario ? 'Aguardando horário comercial...' : dispatchPaused ? 'Fila pausada' : 'Disparo em andamento...';
         return;
       }

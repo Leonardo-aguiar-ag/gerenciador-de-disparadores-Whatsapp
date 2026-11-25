@@ -81,11 +81,13 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(popup, /hostname === 'web\.whatsapp\.com'/);
   assert.doesNotMatch(popup, /chrome\.tabs\.onUpdated|waitForTabComplete/);
   assert.match(popup, /delays: \[0, 300, 650, 1000, 1500, 2000, 2500\]/);
-  assert.match(popup, /Content script do WhatsApp Web não respondeu/);
+  assert.match(popup, /Não foi possível comunicar com a extensão dentro do WhatsApp Web/);
   assert.match(popup, /Falha na conexão: \$\{error\.message\}/);
   assert.match(content, /if\s*\(!verificarConexao\(\)\)/);
   assert.match(content, /window\.__v10IsWhatsAppReady/);
   assert.doesNotMatch(content, /function elementoVisivel|primeiroVisivel/);
+  assert.match(content, /fallback = setTimeout/);
+  assert.match(content, /acao: "dispatch_status", fase: "enviando", contato: numeroDestino/);
   assert.match(adapter, /function isVisible/);
   assert.match(adapter, /function isWhatsAppReady/);
   assert.match(adapter, /ready: true/);
@@ -98,6 +100,7 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(worker, /active: Boolean\(active\.active\)/, 'resultados tardios não devem reativar uma fila parada');
   assert.match(worker, /heartbeatAt/);
   assert.match(worker, /chrome\.storage\.session\.set/);
+  assert.match(worker, /currentContact: message\.contato/);
   assert.match(worker, /v10-weekly-backup/);
   assert.match(popup, /A ausência de um snapshot vivo não autoriza apagar/);
   assert.match(popup, /Fila persistida; monitorando a aba/);

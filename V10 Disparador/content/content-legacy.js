@@ -28,14 +28,18 @@ if (!window.botListenerAdded) {
     } catch (e) { botWorker = null; }
 
     function sleep(ms) {
-        if (botWorker) {
-            return new Promise(resolve => {
-                const id = ++sleepId;
-                sleepCallbacks.set(id, resolve);
-                botWorker.postMessage({ acao: 'sleep', ms, id });
-            });
-        }
-        return new Promise(r => setTimeout(r, ms));
+        // O worker reduz o throttling, mas nunca pode bloquear a fila sozinho:
+        // se ele for descartado pelo navegador, o fallback libera a promessa.
+        return new Promise(resolve => {
+            let settled = false;
+            const finish = () => { if (settled) return; settled = true; resolve(); };
+            const fallback = setTimeout(finish, Math.max(0, Number(ms) || 0) + 250);
+            if (!botWorker) return;
+            const id = ++sleepId;
+            sleepCallbacks.set(id, () => { clearTimeout(fallback); finish(); });
+            try { botWorker.postMessage({ acao: 'sleep', ms, id }); }
+            catch { sleepCallbacks.delete(id); }
+        });
     }
 
     const dispatchState = {
@@ -343,6 +347,7 @@ if (!window.botListenerAdded) {
                 sendMsg({ acao: "log_resultado", numero: numeroDestino, nome: nomeCliente, status: "ERRO", mensagem: "Nenhum script válido", enviados: dispatchState.enviados, total: dispatchState.total, variante });
                 continue;
             }
+            sendMsg({ acao: "dispatch_status", fase: "enviando", contato: numeroDestino, nome: nomeCliente, enviados: dispatchState.enviados, total: dispatchState.total });
             const textoSorteado = scripts[Math.floor(Math.random() * scripts.length)];
             let textoFinal = processarSpintax(textoSorteado);
             const nomeFormatado = nomeCliente.charAt(0).toUpperCase() + nomeCliente.slice(1).toLowerCase();

@@ -126,6 +126,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           waitingForBusinessHours: message.parado ? false : Boolean(message.esperandoHorario),
           sent: Number(message.enviados ?? active.sent ?? 0),
           total: Number(message.total ?? active.total ?? 0),
+          currentContact: message.contato || active.currentContact || '',
+          currentName: message.nome || active.currentName || '',
+          phase: message.fase || (message.parado ? 'parado' : active.phase || ''),
           stoppedAt: message.parado ? new Date().toISOString() : active.stoppedAt
         });
         return sendResponse({ ok: true });
