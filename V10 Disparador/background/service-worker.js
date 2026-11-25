@@ -54,6 +54,16 @@ async function saveDispatch(patch) {
   }
 }
 
+// Mensagens de resultado e de posição da fila chegam quase simultaneamente.
+// Serializar a leitura/escrita evita que uma resposta antiga grave um contador
+// menor depois de uma resposta mais nova.
+let dispatchMutationQueue = Promise.resolve();
+function enqueueDispatchMutation(mutation) {
+  const next = dispatchMutationQueue.then(mutation, mutation);
+  dispatchMutationQueue = next.catch(() => {});
+  return next;
+}
+
 async function scheduleMaintenanceAlarms() {
   // chrome.alarms is not part of Electron's documented supported extension APIs.
   if (!chrome.alarms?.create) return;
@@ -90,60 +100,69 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     try {
       if (message.acao === 'log_resultado') {
-        const stored = await chrome.storage.local.get(['v10DispatchLogs', 'v10ActiveDispatch']);
-        const logs = stored.v10DispatchLogs || [];
-        const active = stored.v10ActiveDispatch || {};
-        const item = {
-          created_at: new Date().toISOString(),
-          level: message.status === 'ERRO' ? 'error' : 'info',
-          event: `web.${String(message.status || 'result').toLowerCase()}`,
-          details: { name: message.nome || '', phone: message.numero || '', status: message.status || '', message: message.mensagem || '' }
-        };
-        await chrome.storage.local.set({
-          v10DispatchLogs: [item, ...logs].slice(0, 500),
-          v10ActiveDispatch: {
-            ...active,
-            active: Boolean(active.active),
-            paused: Boolean(active.active && active.paused),
-            total: Number(message.total || active.total || 0),
-            sent: Number(message.enviados || 0),
-            lastContact: message.nome || message.numero || '—',
-            lastStatus: message.status || '',
-            heartbeatAt: item.created_at
-          }
+        await enqueueDispatchMutation(async () => {
+          const stored = await chrome.storage.local.get(['v10DispatchLogs', 'v10ActiveDispatch']);
+          const logs = stored.v10DispatchLogs || [];
+          const active = stored.v10ActiveDispatch || {};
+          const item = {
+            created_at: new Date().toISOString(),
+            level: message.status === 'ERRO' ? 'error' : 'info',
+            event: `web.${String(message.status || 'result').toLowerCase()}`,
+            details: { name: message.nome || '', phone: message.numero || '', status: message.status || '', message: message.mensagem || '' }
+          };
+          await chrome.storage.local.set({
+            v10DispatchLogs: [item, ...logs].slice(0, 500),
+            v10ActiveDispatch: {
+              ...active,
+              active: Boolean(active.active),
+              paused: Boolean(active.active && active.paused),
+              total: Number(message.total || active.total || 0),
+              sent: Math.max(Number(active.sent || 0), Number(message.enviados || 0)),
+              lastContact: message.nome || message.numero || '—',
+              lastStatus: message.status || '',
+              heartbeatAt: item.created_at
+            }
+          });
         });
         return sendResponse({ ok: true });
       }
       if (message.acao === 'progresso_fila') {
-        await saveDispatch({ active: Boolean((await readDispatch()).active), sent: Number(message.indice || 0) });
+        await enqueueDispatchMutation(async () => {
+          const active = await readDispatch();
+          await saveDispatch({ active: Boolean(active.active), sent: Math.max(Number(active.sent || 0), Number(message.indice || 0)) });
+        });
         return sendResponse({ ok: true });
       }
       if (message.acao === 'dispatch_status') {
-        const active = await readDispatch();
-        await saveDispatch({
-          active: message.parado ? false : Boolean(active.active),
-          paused: message.parado ? false : Boolean(active.active && message.pausado),
-          waitingForBusinessHours: message.parado ? false : Boolean(message.esperandoHorario),
-          sent: Number(message.enviados ?? active.sent ?? 0),
-          total: Number(message.total ?? active.total ?? 0),
-          currentContact: message.contato || active.currentContact || '',
-          currentName: message.nome || active.currentName || '',
-          phase: message.fase || (message.parado ? 'parado' : active.phase || ''),
-          stoppedAt: message.parado ? new Date().toISOString() : active.stoppedAt
+        await enqueueDispatchMutation(async () => {
+          const active = await readDispatch();
+          await saveDispatch({
+            active: message.parado ? false : Boolean(active.active),
+            paused: message.parado ? false : Boolean(active.active && message.pausado),
+            waitingForBusinessHours: message.parado ? false : Boolean(message.esperandoHorario),
+            sent: Math.max(Number(active.sent || 0), Number(message.enviados ?? 0)),
+            total: Number(message.total ?? active.total ?? 0),
+            currentContact: message.contato || active.currentContact || '',
+            currentName: message.nome || active.currentName || '',
+            phase: message.fase || (message.parado ? 'parado' : active.phase || ''),
+            stoppedAt: message.parado ? new Date().toISOString() : active.stoppedAt
+          });
         });
         return sendResponse({ ok: true });
       }
       if (message.acao === 'dispatch_concluido') {
-        const active = await readDispatch();
-        await saveDispatch({
-          ...active,
-          active: false,
-          paused: false,
-          sent: Number(message.enviados ?? active.sent ?? 0),
-          total: Number(message.total ?? active.total ?? 0),
-          waitingForBusinessHours: false,
-          completedAt: new Date().toISOString(),
-          error: message.erro || ''
+        await enqueueDispatchMutation(async () => {
+          const active = await readDispatch();
+          await saveDispatch({
+            ...active,
+            active: false,
+            paused: false,
+            sent: Math.max(Number(active.sent || 0), Number(message.enviados ?? 0)),
+            total: Number(message.total ?? active.total ?? 0),
+            waitingForBusinessHours: false,
+            completedAt: new Date().toISOString(),
+            error: message.erro || ''
+          });
         });
         return sendResponse({ ok: true });
       }

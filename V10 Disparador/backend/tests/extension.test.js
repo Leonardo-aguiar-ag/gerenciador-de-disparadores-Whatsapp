@@ -101,6 +101,8 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(worker, /heartbeatAt/);
   assert.match(worker, /chrome\.storage\.session\.set/);
   assert.match(worker, /currentContact: message\.contato/);
+  assert.match(worker, /function enqueueDispatchMutation/);
+  assert.match(worker, /sent: Math\.max\(Number\(active\.sent \|\| 0\)/);
   assert.match(worker, /v10-weekly-backup/);
   assert.match(popup, /A ausência de um snapshot vivo não autoriza apagar/);
   assert.match(popup, /Fila persistida; monitorando a aba/);
