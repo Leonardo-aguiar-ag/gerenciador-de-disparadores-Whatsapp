@@ -1,0 +1,6 @@
+{
+  "name": "gerenciador-disparadores-v11-extension",
+  "version": "11.0.0",
+  "private": true,
+  "type": "module"
+}

@@ -1,6 +1,6 @@
 # Gerenciador de Disparadores WhatsApp
 
-Coleção de versões de uma extensão Chrome para organizar filas e executar disparos pelo WhatsApp Web. A versão recomendada e mantida é a **V10 Disparador**; as versões V1–V9 ficam no repositório como histórico e referência.
+Coleção de versões de uma extensão Chrome para organizar campanhas e filas pelo WhatsApp Web. A **V11 Disparador** é a versão experimental mais completa; a V10 permanece estável e as versões V1–V9 ficam no repositório como histórico e referência.
 
 > **Uso responsável:** envie mensagens somente para contatos que autorizaram o recebimento. Respeite as políticas do WhatsApp, a legislação aplicável, os limites da conta e os horários de contato. A automação da interface não elimina o risco de bloqueio ou de mensagens consideradas spam.
 
@@ -20,8 +20,15 @@ As versões estão organizadas diretamente na raiz, com nomes padronizados:
 | V8 | [`V8 Disparador`](V8%20Disparador/) | Histórico: filas em lotes |
 | V9 | [`V9 Disparador`](V9%20Disparador/) | Histórico: extensão completa e backend experimental |
 | V10 | [`V10 Disparador`](V10%20Disparador/) | **Atual: modular, persistente e testada** |
+| V11 | [`V11 Disparador`](V11%20Disparador/) | **Experimental: campanhas, fila por estados, diagnóstico e relatórios** |
 
-Cada pasta de extensão contém seu próprio `manifest.json`. A V10 usa a estrutura modular `popup/`, `background/`, `content/`, `shared/`, `assets/` e `backend/`.
+Cada pasta de extensão contém seu próprio `manifest.json`. A V10 e a V11 usam a estrutura modular `popup/`, `background/`, `content/`, `shared/`, `assets/` e `backend/`.
+
+## V11 — Gerenciador de Campanhas e Filas Persistentes
+
+A V11 implementa um novo motor de fila com estados individuais, checkpoints, modo de recuperação, painel de acompanhamento, validação pré-disparo, variáveis personalizadas, editor e prévia de mensagens, logs técnicos, diagnóstico de compatibilidade, relatórios CSV/JSON e métricas. O backend SQLite é separado e opcional; a extensão continua funcionando localmente com o WhatsApp Web.
+
+Para testar, carregue a pasta [`V11 Disparador`](V11%20Disparador/) em `chrome://extensions`. Leia também a [documentação da V11](V11%20Disparador/README.md).
 
 ## Instalar a versão recomendada (V10)
 
