@@ -9,7 +9,8 @@ const call = (path, options = {}) => new Promise((resolve, reject) => chrome.run
 const msg = (text, error = false) => { $('status').textContent = ` ${text}`; $('status').style.color = error ? 'var(--bad)' : 'var(--ok)'; };
 const clock = seconds => { seconds = Math.max(0, Math.floor(seconds)); const h = String(Math.floor(seconds / 3600)).padStart(2, '0'); const m = String(Math.floor(seconds % 3600 / 60)).padStart(2, '0'); const s = String(seconds % 60).padStart(2, '0'); return `${h}:${m}:${s}`; };
 function updateRun(done, success, status, contact) { const total = runState.total || 0; if (done != null) runState.done = Number(done) || 0; if (success != null) runState.success = Number(success) || 0; if (status != null) runState.status = status; if (contact != null && contact !== '') runState.contact = contact; done = Number(runState.done || 0); success = Number(runState.success || 0); status = runState.status || 'Enviando mensagens...'; contact = runState.contact || '—'; const pct = total ? Math.min(100, done / total * 100) : 0; $('runCount').textContent = `${done} / ${total}`; $('runSuccess').textContent = success; $('runBar').style.width = `${pct}%`; $('runStatus').textContent = status; $('runContact').textContent = contact || '—'; const elapsed = runState.startedAt ? (Date.now() - runState.startedAt) / 1000 : 0; $('runElapsed').textContent = clock(elapsed); $('runEstimate').textContent = done && total > done ? clock(elapsed / done * (total - done)) : done >= total && total ? '00:00:00' : clock(total * ((cfg.minDelay || 15) + (cfg.maxDelay || 30)) / 2); }
-function beginRun(rows) { clearInterval(runState.timer); clearInterval(runState.poll); runState = { total: rows.length, rows, startedAt: Date.now(), done: 0, success: 0, status: 'Preparando fila...', contact: rows[0]?.name || rows[0]?.phone || '—', timer: null, poll: null }; runState.timer = setInterval(() => updateRun(), 1000); updateRun(); }
+function updateQueueProgress(done, total = runState.total) { done = Math.max(0, Number(done) || 0); total = Math.max(0, Number(total) || 0); const progress = total ? Math.min(100, Math.round(done / total * 100)) : 0; $('bar').style.width = `${progress}%`; $('percent').textContent = `${progress}%`; $('txtEnvios').textContent = `${done} / ${total} mensagens`; }
+function beginRun(rows) { clearInterval(runState.timer); clearInterval(runState.poll); runState = { total: rows.length, rows, startedAt: Date.now(), done: 0, success: 0, status: 'Preparando fila...', contact: rows[0]?.name || rows[0]?.phone || '—', timer: null, poll: null }; runState.timer = setInterval(() => updateRun(), 1000); updateQueueProgress(0, rows.length); updateRun(); }
 function finishRun(success, failed = 0, status = 'Disparo concluído', completed = runState.total) { clearInterval(runState.timer); clearInterval(runState.poll); updateRun(completed, success, status, failed ? `${failed} com erro` : 'Concluído'); }
 function pollRun() { clearInterval(runState.poll); runState.poll = setInterval(async () => { try { const d = await call('/api/messages'); const phones = new Set(runState.rows.map(x => x.phone)); const items = (d.data || []).filter(x => phones.has(x.to || x.to_phone)); const done = items.filter(x => ['sent','delivered','read','failed','cancelled'].includes(x.state)); const success = items.filter(x => ['sent','delivered','read'].includes(x.state)).length; const failed = items.filter(x => ['failed','cancelled'].includes(x.state)).length; const current = items.find(x => x.state === 'pending' || x.state === 'processing'); updateRun(done.length, success, done.length >= runState.total ? 'Disparo concluído' : 'Enviando mensagens...', current?.to || '—'); if (done.length >= runState.total) finishRun(success, failed); } catch {} }, 1500); }
 async function localDispatchLogs() { const result = await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10DispatchLogs'] }, resolve)); return result?.data?.v10DispatchLogs || []; }
@@ -22,6 +23,7 @@ async function restoreActiveDispatch() {
   if (!active?.active) {
     if (!last?.rows?.length) return;
     runState = { total: last.rows.length, rows: last.rows, startedAt: Date.parse(last.savedAt || '') || 0, timer: null, poll: null };
+    updateQueueProgress(Number(active?.sent || 0), last.rows.length);
     updateRun(Number(active?.sent || 0), Number(active?.sent || 0), active?.error || (active?.stoppedAt ? 'Último disparo parado' : 'Último disparo concluído'), active?.lastContact || 'Concluído');
     return;
   }
@@ -43,8 +45,10 @@ async function restoreActiveDispatch() {
     const current = (await new Promise(resolve => chrome.runtime.sendMessage({ type: 'storage:get', keys: ['v10ActiveDispatch'] }, resolve))).data?.v10ActiveDispatch || active;
     if (!current.active) { finishRun(current.sent || 0, current.error ? 1 : 0, current.error || (current.stoppedAt ? 'Fila parada' : 'Disparo concluído'), current.sent || 0); return; }
     dispatchPaused = Boolean(current.paused);
+    updateQueueProgress(current.sent || 0, current.total || active.total);
     updateRun(current.sent || 0, current.sent || 0, current.waitingForBusinessHours ? 'Aguardando horário comercial...' : current.paused ? 'Fila pausada' : liveDispatch?.active ? 'Disparo em andamento...' : 'Fila persistida; monitorando a aba...', current.currentName || current.currentContact || current.lastContact || '—');
   }, 1000), poll: null };
+    updateQueueProgress(active.sent || 0, active.total);
     updateRun(active.sent || 0, active.sent || 0, active.waitingForBusinessHours ? 'Aguardando horário comercial...' : active.paused ? 'Fila pausada' : 'Disparo em andamento...', active.currentName || active.currentContact || active.lastContact || '—');
 }
 function updateDispatchControls() { $('queue').textContent = '▶ INICIAR DISPARO NO WHATSAPP WEB'; }
@@ -116,6 +120,7 @@ async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
       if (message.acao === 'dispatch_status' && message.parado) {
         chrome.runtime.onMessage.removeListener(listener);
         dispatchPaused = false;
+        updateQueueProgress(Number(message.enviados || 0), rows.length);
         finishRun(Number(message.enviados || 0), 0, 'Fila parada', Number(message.enviados || 0));
         resolve({ queued: Number(message.enviados || 0), stopped: true });
         return;
@@ -128,12 +133,14 @@ async function dispatchOnWhatsApp(rows, scripts, warmUpLimite) {
       if (message.acao === 'log_resultado') {
         const done = Number(message.enviados || 0); const success = message.status === 'OK' ? done : Math.max(0, done - 1);
         setTimeout(() => refreshLocalDashboard().catch(() => {}), 100);
+        updateQueueProgress(done, rows.length);
         updateRun(done, success, done >= rows.length ? 'Disparo concluído' : 'Enviando mensagens...', message.nome || message.numero || '—');
       }
       if (message.acao === 'dispatch_concluido') {
         chrome.runtime.onMessage.removeListener(listener);
         const failed = message.erro ? rows.length : 0;
         const completed = Number(message.enviados ?? rows.length); const limited = Boolean(message.limiteAtingido || completed < rows.length);
+        updateQueueProgress(completed, rows.length);
         if (message.erro) { finishRun(0, failed, message.erro, completed); reject(new Error(message.erro)); } else { finishRun(completed, 0, limited ? 'Limite diário de warm-up atingido' : 'Disparo concluído', completed); resolve({ queued: completed, total: rows.length, limited }); }
       }
     };

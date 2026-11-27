@@ -40,7 +40,11 @@ A V10 mantém o disparo no service worker/content script quando o popup é fecha
 
 ### Correção do contador da V10
 
-O pacote atualizado corrige o contador e o contato atual durante a troca de destinatários. O timer visual do popup não sobrescreve mais o progresso com `0` nem o contato com `—` enquanto a fila continua enviando. Para atualizar uma instalação existente, baixe o [`V10-Disparador.zip`](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/download/v10.0.0-pacotes/V10-Disparador.zip), extraia-o e clique em **Recarregar** na página `chrome://extensions`.
+O pacote atualizado corrige o contador e o contato atual durante a troca de destinatários. O timer visual do popup não sobrescreve mais o progresso com `0` nem o contato com `—` enquanto a fila continua enviando.
+
+A barra inferior também é atualizada em tempo real a cada resultado, inclusive ao pular contatos duplicados ou que solicitaram não receber mensagens. A posição da fila é persistida nesses casos e quando uma variante não possui script válido, permitindo uma retomada consistente. O acesso ao armazenamento de sessão é opcional para manter a compatibilidade com ambientes Electron.
+
+Para atualizar uma instalação existente, baixe o [`V10-Disparador.zip`](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/download/v10.0.0-pacotes/V10-Disparador.zip), extraia-o e clique em **Recarregar** na página `chrome://extensions`.
 
 ## Contatos e scripts
 

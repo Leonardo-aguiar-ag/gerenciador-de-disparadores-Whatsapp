@@ -326,12 +326,14 @@ if (!window.botListenerAdded) {
             if (dispatchState.optOut[numeroDestino]) {
                 dispatchState.enviados++;
                 sendMsg({ acao: "log_resultado", numero: numeroDestino, nome: nomeCliente, status: "OPT_OUT", mensagem: "(bloqueado)", enviados: dispatchState.enviados, total: dispatchState.total, campanhaId: fila.campanhaId, eventoId: `${fila.campanhaId}:${numeroDestino}:OPT_OUT` });
+                sendMsg({ acao: "progresso_fila", indice: i + 1 });
                 await sleep(100);
                 continue;
             }
             if (!ignoraDuplicatas && dispatchState.duplicatas[numeroDestino]) {
                 dispatchState.enviados++;
                 sendMsg({ acao: "log_resultado", numero: numeroDestino, nome: nomeCliente, status: "DUPLICADO", mensagem: "(pulou)", enviados: dispatchState.enviados, total: dispatchState.total, campanhaId: fila.campanhaId, eventoId: `${fila.campanhaId}:${numeroDestino}:DUPLICADO` });
+                sendMsg({ acao: "progresso_fila", indice: i + 1 });
                 await sleep(200);
                 continue;
             }
@@ -344,7 +346,9 @@ if (!window.botListenerAdded) {
                 if (v) scripts = v.scripts;
             }
             if (!Array.isArray(scripts) || !scripts.length) {
+                dispatchState.enviados++;
                 sendMsg({ acao: "log_resultado", numero: numeroDestino, nome: nomeCliente, status: "ERRO", mensagem: "Nenhum script válido", enviados: dispatchState.enviados, total: dispatchState.total, variante });
+                sendMsg({ acao: "progresso_fila", indice: i + 1 });
                 continue;
             }
             sendMsg({ acao: "dispatch_status", fase: "enviando", contato: numeroDestino, nome: nomeCliente, enviados: dispatchState.enviados, total: dispatchState.total });

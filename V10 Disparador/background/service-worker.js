@@ -173,7 +173,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       if (message.type === 'storage:set') {
         const data = message.data || {};
         await chrome.storage.local.set(data);
-        if (data.v10ActiveDispatch) await chrome.storage.session.set({ v10ActiveDispatch: data.v10ActiveDispatch });
+        if (data.v10ActiveDispatch && chrome.storage.session?.set) {
+          try { await chrome.storage.session.set({ v10ActiveDispatch: data.v10ActiveDispatch }); }
+          catch (error) { console.warn('[V10] storage.session indisponível; estado mantido em storage.local:', error.message); }
+        }
         return sendResponse({ ok: true });
       }
       if (message.type === 'backup') { const data = await chrome.storage.local.get(null); return sendResponse({ ok: true, data, createdAt: new Date().toISOString() }); }

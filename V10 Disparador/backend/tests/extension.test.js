@@ -96,6 +96,9 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(content, /if \(!dispatchState\.rodando\).*Não existe disparo ativo para pausar/);
   assert.match(content, /dispatchState\.warmUpLimite = warmUpLimite == null \? null/);
   assert.match(content, /dispatch_concluido", limiteAtingido: true, enviados: dispatchState\.enviados/);
+  assert.match(content, /status: "OPT_OUT"[\s\S]*progresso_fila/);
+  assert.match(content, /status: "DUPLICADO"[\s\S]*progresso_fila/);
+  assert.match(content, /status: "ERRO"[\s\S]*enviados\+\+/);
   assert.match(worker, /active:\s*message\.parado\s*\?\s*false\s*:\s*Boolean\(active\.active\)/);
   assert.match(worker, /active: Boolean\(active\.active\)/, 'resultados tardios não devem reativar uma fila parada');
   assert.match(worker, /heartbeatAt/);
@@ -103,6 +106,7 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(worker, /currentContact: message\.contato/);
   assert.match(worker, /function enqueueDispatchMutation/);
   assert.match(worker, /sent: Math\.max\(Number\(active\.sent \|\| 0\)/);
+  assert.match(worker, /if \(data\.v10ActiveDispatch && chrome\.storage\.session\?\.set\)/);
   assert.match(worker, /v10-weekly-backup/);
   assert.match(popup, /A ausência de um snapshot vivo não autoriza apagar/);
   assert.match(popup, /Fila persistida; monitorando a aba/);
@@ -110,4 +114,6 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(popup, /function updateRun\(done, success, status, contact\)/);
   assert.match(popup, /if \(done != null\) runState\.done/);
   assert.match(popup, /setInterval\(\(\) => updateRun\(\), 1000\)/);
+  assert.match(popup, /function updateQueueProgress\(done, total = runState\.total\)/);
+  assert.match(popup, /updateQueueProgress\(done, rows\.length\)/);
 });
