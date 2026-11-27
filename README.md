@@ -38,6 +38,10 @@ Depois de alterar os arquivos, clique em **Recarregar** na página de extensões
 
 A V10 mantém o disparo no service worker/content script quando o popup é fechado, persiste a fila em `chrome.storage.local` e `chrome.storage.session`, e permite retomar uma fila salva. A aba autenticada do WhatsApp Web precisa permanecer aberta.
 
+### Correção do contador da V10
+
+O pacote atualizado corrige o contador e o contato atual durante a troca de destinatários. O timer visual do popup não sobrescreve mais o progresso com `0` nem o contato com `—` enquanto a fila continua enviando. Para atualizar uma instalação existente, baixe o [`V10-Disparador.zip`](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/download/v10.0.0-pacotes/V10-Disparador.zip), extraia-o e clique em **Recarregar** na página `chrome://extensions`.
+
 ## Contatos e scripts
 
 O formato mais simples de contato é:
@@ -75,7 +79,7 @@ Os testes cobrem o manifesto, a injeção única dos scripts, o parser de contat
 
 ## Downloads das versões
 
-Os pacotes ZIP instaláveis de todas as versões estão disponíveis na [release Pacotes das versões V1–V10](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/tag/v10.0.0-pacotes). A release contém um arquivo separado para cada pasta, de `V1-Disparador.zip` até `V10-Disparador.zip`.
+Os pacotes ZIP instaláveis de todas as versões estão disponíveis na [release Pacotes das versões V1–V10](https://github.com/Leonardo-aguiar-ag/gerenciador-de-disparadores-Whatsapp/releases/tag/v10.0.0-pacotes). A release contém um arquivo separado para cada pasta, de `V1-Disparador.zip` até `V10-Disparador.zip`; o pacote da V10 é substituído quando há uma correção aprovada.
 
 ## Limitações
 

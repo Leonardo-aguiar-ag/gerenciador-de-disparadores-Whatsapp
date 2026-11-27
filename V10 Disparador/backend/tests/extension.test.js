@@ -107,4 +107,7 @@ test('início do disparo exige conexão e pausa sem execução não ativa estado
   assert.match(popup, /A ausência de um snapshot vivo não autoriza apagar/);
   assert.match(popup, /Fila persistida; monitorando a aba/);
   assert.match(popup, /Último disparo concluído/);
+  assert.match(popup, /function updateRun\(done, success, status, contact\)/);
+  assert.match(popup, /if \(done != null\) runState\.done/);
+  assert.match(popup, /setInterval\(\(\) => updateRun\(\), 1000\)/);
 });
